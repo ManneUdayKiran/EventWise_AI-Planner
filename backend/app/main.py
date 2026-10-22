@@ -2,8 +2,10 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+import pymongo.errors
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.ai.client import ai_http_client
@@ -71,8 +73,40 @@ def create_app() -> FastAPI:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Custom Exception Handlers
+    # Custom Exception Handlers with guaranteed CORS header preservation
     app.add_exception_handler(AppError, app_error_handler)
+
+    @app.exception_handler(pymongo.errors.PyMongoError)
+    async def mongo_error_handler(request: Request, exc: pymongo.errors.PyMongoError):
+        origin = request.headers.get("origin")
+        headers = {}
+        if origin:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": (
+                    "Database connection unavailable. Please set MONGODB_URL in your "
+                    "Render dashboard environment variables with your MongoDB Atlas connection string."
+                ),
+                "error": str(exc),
+            },
+            headers=headers,
+        )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        origin = request.headers.get("origin")
+        headers = {}
+        if origin:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error", "error": str(exc)},
+            headers=headers,
+        )
 
     # Health Check
     @app.get("/health", tags=["Health"])

@@ -61,8 +61,13 @@ class ValidationError(AppError):
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    """Handle application exceptions cleanly."""
+    """Handle application exceptions cleanly with explicit CORS header preservation."""
     content: dict[str, Any] = {"detail": exc.message}
     if exc.details:
         content["details"] = exc.details
-    return JSONResponse(status_code=exc.status_code, content=content)
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
