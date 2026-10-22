@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { apiClient } from "../services/api";
 import { User } from "../types";
 
 export const DEFAULT_DEMO_USER: User = {
@@ -49,22 +48,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const initSession = async () => {
     try {
+      const savedUser = localStorage.getItem("eventwise_user");
       const savedToken = localStorage.getItem("eventwise_token");
-      if (savedToken) {
-        setToken(savedToken);
-        const res = await apiClient.get<User>("/auth/me");
-        setUser(res.data);
-        localStorage.setItem("eventwise_user", JSON.stringify(res.data));
-        return;
-      }
-
-      // If no token stored, automatically obtain an instant demo planner session
-      const res = await apiClient.post<{ access_token: string; user: User }>("/auth/demo");
-      if (res.data?.access_token) {
-        login(res.data.access_token, res.data.user);
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser));
+        } catch {
+          setUser(DEFAULT_DEMO_USER);
+        }
+        setToken(savedToken || "demo-local-token-001");
+      } else {
+        localStorage.setItem("eventwise_user", JSON.stringify(DEFAULT_DEMO_USER));
+        localStorage.setItem("eventwise_token", "demo-local-token-001");
+        setUser(DEFAULT_DEMO_USER);
+        setToken("demo-local-token-001");
       }
     } catch {
-      // In offline mode or local test fallback, maintain default demo session
       setUser(DEFAULT_DEMO_USER);
     } finally {
       setIsLoading(false);
