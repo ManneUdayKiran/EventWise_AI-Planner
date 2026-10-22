@@ -71,6 +71,7 @@ Return a JSON object with:
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.3,
+            "max_tokens": 3500,
         }
 
         try:
@@ -80,7 +81,7 @@ Return a JSON object with:
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
-                    "User-Agent": "EventWiseAI/1.0",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 },
             )
 

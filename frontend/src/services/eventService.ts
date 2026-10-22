@@ -1,3 +1,4 @@
+import { apiClient } from "./api";
 import {
   Event,
   BudgetSummary,
@@ -20,6 +21,9 @@ import {
   EventSummaryStats,
   ProposedChanges,
 } from "../types";
+
+const GROQ_API_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_GROQ_API_KEY) || "";
 
 export interface CreateEventPayload {
   name: string;
@@ -812,16 +816,157 @@ export const eventService = {
     eventId: string,
     payload?: { focus_areas?: string[]; force_fallback?: boolean }
   ): Promise<AIPlanProposal> {
-    // Artificial smooth processing simulation for optimal UX feedback
-    await new Promise((resolve) => setTimeout(resolve, 350));
-
     const event = await this.getEvent(eventId);
     const budget = event.total_budget || 10000;
     const guests = event.expected_guest_count || 50;
     const focus = payload?.focus_areas || [];
     const eventType = event.event_type || "wedding";
 
-    // Dynamic tailored recommendations based on event type & focus areas
+    // 1. Live AI Blueprint Generation via Backend or Direct Groq Cloud
+    if (!payload?.force_fallback) {
+      // 1a. Try calling backend deployed on Render
+      try {
+        const res = await apiClient.post<AIPlanProposal>(
+          `/events/${eventId}/generate-plan`,
+          {
+            event_context: {
+              id: event.id,
+              name: event.name,
+              event_type: event.event_type,
+              event_date: event.event_date,
+              location: event.location,
+              expected_guest_count: event.expected_guest_count,
+              total_budget: event.total_budget,
+              currency: event.currency || "USD",
+              theme: event.theme,
+              preferences: event.preferences,
+              special_requirements: event.special_requirements,
+            },
+            focus_areas: focus,
+            force_fallback: false,
+          },
+          { timeout: 12000 }
+        );
+        if (res.data && res.data.budget_allocations && res.data.budget_allocations.length > 0) {
+          return res.data;
+        }
+      } catch {
+        // Backend sleeping or offline, proceed directly to Groq Cloud API
+      }
+
+      // 1b. Direct Groq Cloud GenAI (High-speed LLM directly in client)
+      try {
+        const groqPrompt = `Generate a comprehensive, realistic event plan for:
+Event Name: ${event.name}
+Event Type: ${event.event_type}
+Date: ${event.event_date}
+Location: ${event.location}
+Expected Guests: ${event.expected_guest_count}
+Total Budget: $${event.total_budget} ${event.currency || "USD"}
+Theme/Style: ${event.theme || "Modern and elegant"}
+Focus Areas: ${focus.join(", ") || "General comprehensive planning"}
+
+Return a JSON object with:
+- "summary": string
+- "theme_and_decor": array of strings
+- "food_recommendations": array of strings
+- "entertainment_suggestions": array of strings
+- "budget_allocations": array of objects with "category" (venue, catering, photography, decoration, entertainment, invitations, transportation, equipment_rental, miscellaneous), "item_name", "estimated_amount", "notes"
+- "planning_tasks": array of objects with "title", "category", "days_before_event" (integer), "priority" (low, medium, high, urgent), "description"
+- "vendor_categories": array of objects with "category", "item_name", "suggested_scope", "estimated_budget"
+- "personalized_recommendations": array of strings`;
+
+        const groqResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-oss-20b",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an expert event planner. Generate a structured event plan. You MUST respond ONLY with a valid JSON object matching the requested schema. No code fences or extra text.",
+              },
+              { role: "user", content: groqPrompt },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3,
+            max_tokens: 3000,
+          }),
+        });
+
+        if (groqResp.ok) {
+          const groqData = await groqResp.json();
+          const content = groqData.choices?.[0]?.message?.content;
+          if (content) {
+            let clean = content.trim();
+            if (clean.startsWith("```json")) clean = clean.slice(7);
+            if (clean.endsWith("```")) clean = clean.slice(0, -3);
+            const parsed = JSON.parse(clean);
+            if (parsed.budget_allocations && Array.isArray(parsed.budget_allocations) && parsed.budget_allocations.length > 0) {
+              const validBudgetCats = new Set([
+                "venue", "catering", "photography", "decoration", "entertainment",
+                "invitations", "transportation", "equipment_rental", "miscellaneous"
+              ]);
+              const allocations = parsed.budget_allocations.map((b: any) => ({
+                category: validBudgetCats.has(String(b.category).toLowerCase())
+                  ? String(b.category).toLowerCase()
+                  : "miscellaneous",
+                item_name: String(b.item_name || "Service"),
+                estimated_amount: Number(b.estimated_amount) || 0,
+                notes: b.notes ? String(b.notes) : undefined,
+              }));
+
+              const validPriorities = new Set(["low", "medium", "high", "urgent"]);
+              const tasks = (parsed.planning_tasks || []).map((t: any) => ({
+                title: String(t.title || "Task milestone"),
+                category: String(t.category || "General"),
+                days_before_event: Math.max(0, Math.min(730, Number(t.days_before_event) || 14)),
+                priority: validPriorities.has(String(t.priority).toLowerCase())
+                  ? String(t.priority).toLowerCase()
+                  : "medium",
+                description: t.description ? String(t.description) : undefined,
+              }));
+
+              const vendors = (parsed.vendor_categories || []).map((v: any) => ({
+                category: validBudgetCats.has(String(v.category).toLowerCase())
+                  ? String(v.category).toLowerCase()
+                  : "venue",
+                item_name: String(v.item_name || "Vendor Requirement"),
+                suggested_scope: String(v.suggested_scope || "Standard scope"),
+                estimated_budget: Number(v.estimated_budget) || 0,
+              }));
+
+              const totalAlloc = allocations.reduce((acc: number, b: any) => acc + b.estimated_amount, 0);
+
+              return {
+                event_id: eventId,
+                summary: parsed.summary || `Personalized event blueprint for "${event.name}"`,
+                theme_and_decor: parsed.theme_and_decor || [],
+                food_recommendations: parsed.food_recommendations || [],
+                entertainment_suggestions: parsed.entertainment_suggestions || [],
+                budget_allocations: allocations,
+                planning_tasks: tasks,
+                vendor_categories: vendors,
+                personalized_recommendations: parsed.personalized_recommendations || [],
+                provider_used: "groq (openai/gpt-oss-20b)",
+                is_fallback: false,
+                total_proposed_budget: totalAlloc > 0 ? totalAlloc : budget,
+                created_at: new Date().toISOString(),
+              };
+            }
+          }
+        }
+      } catch (groqErr) {
+        console.warn("Direct Groq call exception:", groqErr);
+      }
+    }
+
+    // 2. Client-Side Heuristic Fallback
+    await new Promise((resolve) => setTimeout(resolve, 350));
     const summary = `Tailored blueprint for "${event.name}" (${eventType.toUpperCase()}) with ${guests} guests and $${budget.toLocaleString()} planned budget. Combines mathematical allocation with cohesive ambiance styling.`;
 
     // 1. Theme and Decor suggestions
@@ -1116,9 +1261,136 @@ export const eventService = {
     };
     history.push(userMsg);
 
-    // 2. Client-Side Resilient Assistant Logic
-    const event = await this.getEvent(eventId);
-    const budgetSummary = await this.getBudgetSummary(eventId);
+    // 2. Live Groq Assistant via Backend or Direct Groq Cloud
+    if (!_forceFallback) {
+      // 2a. Try Backend
+      try {
+        const res = await apiClient.post<AssistantResponse>(
+          `/events/${eventId}/assistant`,
+          {
+            prompt,
+            event_context: event,
+            budget_items: budgetSummary.items,
+            tasks: getTasksFromStorage().filter((t) => t.event_id === eventId),
+            vendors: getVendorsFromStorage().filter((v) => v.event_id === eventId),
+            force_fallback: false,
+          },
+          { timeout: 12000 }
+        );
+        if (res.data && res.data.reply) {
+          if (res.data.proposal_id && res.data.proposed_changes) {
+            const stagedProposals = getStored<Record<string, { proposal: ProposedChanges; eventId: string }>>(
+              STORAGE_KEYS.STAGED_PROPOSALS,
+              {}
+            );
+            stagedProposals[res.data.proposal_id] = { proposal: res.data.proposed_changes, eventId };
+            setStored(STORAGE_KEYS.STAGED_PROPOSALS, stagedProposals);
+          }
+          const assistantMsg: AssistantMessageLog = {
+            id: generateId("msg"),
+            event_id: eventId,
+            user_id: "demo-planner-001",
+            role: "assistant",
+            content: res.data.reply,
+            proposal_id: res.data.proposal_id,
+            created_at: new Date().toISOString(),
+          };
+          history.push(assistantMsg);
+          setStored(chatKey, history);
+          return res.data;
+        }
+      } catch {
+        // Backend unavailable, fall back to direct Groq Cloud call
+      }
+
+      // 2b. Direct Groq Assistant
+      try {
+        const systemPrompt = `You are EventWise AI, an expert event planner assistant.
+Help the user plan or modify their event.
+If they ask for changes (budget changes, new tasks, vendor updates, guest count), return a valid JSON object with 'reply' and 'proposed_changes' and 'requires_confirmation': true.
+If they are asking for ideas, suggestions, or general advice, return 'proposed_changes': null and 'requires_confirmation': false.
+Categories for budget: venue, catering, photography, decoration, entertainment, invitations, transportation, equipment_rental, miscellaneous.
+
+JSON schema:
+{
+  "reply": "Conversational explanation",
+  "requires_confirmation": true/false,
+  "proposed_changes": {
+    "budget_adjustments": [{"category": "catering", "action": "increase", "amount": 500, "delta": 500, "reason": "reason"}],
+    "task_additions": [{"title": "Task name", "category": "Coordination", "due_date": "2026-11-01T00:00:00Z", "priority": "high", "description": "details"}],
+    "vendor_additions": [{"category": "photography", "item_name": "Photographer", "suggested_scope": "scope", "target_quote": 1200}],
+    "event_updates": {"expected_guest_count": null, "total_budget": null, "theme": null}
+  }
+}`;
+
+        const userPrompt = `Event: ${event.name} (${event.event_type})
+Total Budget: $${event.total_budget}
+Guests: ${event.expected_guest_count}
+User Message: ${prompt}`;
+
+        const groqResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-oss-20b",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.2,
+            max_tokens: 1500,
+          }),
+        });
+
+        if (groqResp.ok) {
+          const data = await groqResp.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            let clean = content.trim();
+            if (clean.startsWith("```json")) clean = clean.slice(7);
+            if (clean.endsWith("```")) clean = clean.slice(0, -3);
+            const parsed = JSON.parse(clean);
+            const proposalId = parsed.requires_confirmation ? generateId("prop") : undefined;
+            if (proposalId && parsed.proposed_changes) {
+              const staged = getStored<Record<string, { proposal: ProposedChanges; eventId: string }>>(
+                STORAGE_KEYS.STAGED_PROPOSALS,
+                {}
+              );
+              staged[proposalId] = { proposal: parsed.proposed_changes, eventId };
+              setStored(STORAGE_KEYS.STAGED_PROPOSALS, staged);
+            }
+            const assistantMsg: AssistantMessageLog = {
+              id: generateId("msg"),
+              event_id: eventId,
+              user_id: "demo-planner-001",
+              role: "assistant",
+              content: parsed.reply,
+              proposal_id: proposalId,
+              created_at: new Date().toISOString(),
+            };
+            history.push(assistantMsg);
+            setStored(chatKey, history);
+            return {
+              proposal_id: proposalId,
+              reply: parsed.reply,
+              proposed_changes: parsed.proposed_changes || undefined,
+              requires_confirmation: Boolean(parsed.requires_confirmation),
+              provider_used: "groq (openai/gpt-oss-20b)",
+              is_fallback: false,
+              created_at: new Date().toISOString(),
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("Direct Groq assistant error:", err);
+      }
+    }
+
+    // 3. Client-Side Heuristic Fallback
     const lower = prompt.toLowerCase();
 
     let reply = "";

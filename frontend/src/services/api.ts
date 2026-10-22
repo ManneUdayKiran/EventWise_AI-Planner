@@ -37,29 +37,9 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle auth failures and auto-recover with demo session
+// Response interceptor
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as any;
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        const demoRes = await axios.post(`${API_BASE_URL}/auth/demo`);
-        if (demoRes.data?.access_token) {
-          localStorage.setItem("eventwise_token", demoRes.data.access_token);
-          localStorage.setItem("eventwise_user", JSON.stringify(demoRes.data.user));
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${demoRes.data.access_token}`;
-          }
-          return apiClient(originalRequest);
-        }
-      } catch {
-        localStorage.removeItem("eventwise_token");
-        localStorage.removeItem("eventwise_user");
-      }
-    }
-    return Promise.reject(error);
-  }
+  (error: AxiosError) => Promise.reject(error)
 );
 

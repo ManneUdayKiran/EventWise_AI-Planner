@@ -85,6 +85,10 @@ class AssistantMessageRequest(BaseSchema):
         default=False,
         description="Force deterministic offline NLP parser for testing or offline mode",
     )
+    event_context: dict | None = Field(default=None, description="Event details from localStorage")
+    budget_items: list[dict] | None = Field(default=None, description="Budget items from localStorage")
+    tasks: list[dict] | None = Field(default=None, description="Tasks from localStorage")
+    vendors: list[dict] | None = Field(default=None, description="Vendors from localStorage")
 
 
 class AssistantResponse(BaseSchema):

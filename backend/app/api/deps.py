@@ -1,75 +1,51 @@
-"""FastAPI dependency injection utilities."""
+"""FastAPI dependency injection utilities (Stateless)."""
 
 from datetime import UTC, datetime
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.core.database import get_database
 from app.core.security import decode_access_token
-from app.repositories.user_repo import UserRepository
 from app.schemas.user import UserResponse
 
 security_scheme = HTTPBearer(auto_error=False)
 
+DEMO_USER = UserResponse(
+    id="demo-planner-001",
+    email="planner@eventwise.ai",
+    full_name="Event Planner",
+    is_active=True,
+    created_at=datetime.now(UTC),
+)
+
 
 async def get_current_user(
     auth: HTTPAuthorizationCredentials = Depends(security_scheme),
-    db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> UserResponse:
-    """Validate Bearer token or fallback seamlessly to default demo planner user."""
+    """Validate Bearer token statelessly or fallback seamlessly to default demo user."""
     if not auth or not auth.credentials:
-        from app.services.auth_service import AuthService
-        service = AuthService(db)
-        demo = await service.get_or_create_demo_user()
-        return demo.user
+        return DEMO_USER
 
     payload = decode_access_token(auth.credentials)
     if not payload or "sub" not in payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication token.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id = payload["sub"]
-    user_repo = UserRepository(db)
-    user_doc = await user_repo.find_by_id(user_id)
-
-    if not user_doc:
-        # If token was for demo user or user was recreated, provide demo user
-        from app.services.auth_service import AuthService
-        service = AuthService(db)
-        demo = await service.get_or_create_demo_user()
-        return demo.user
-
-    if not user_doc.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        return DEMO_USER
 
     return UserResponse(
-        id=user_doc["id"],
-        email=user_doc["email"],
-        full_name=user_doc.get("full_name", ""),
-        is_active=user_doc.get("is_active", True),
-        created_at=user_doc.get("created_at") or datetime.now(UTC),
+        id=payload["sub"],
+        email=payload.get("email", "planner@eventwise.ai"),
+        full_name=payload.get("full_name", "Event Planner"),
+        is_active=True,
+        created_at=datetime.now(UTC),
     )
 
 
 async def get_strict_current_user(
     auth: HTTPAuthorizationCredentials = Depends(security_scheme),
-    db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> UserResponse:
-    """Validate Bearer token strictly for endpoints requiring explicit authentication."""
-    if not auth or not auth.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token required.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return await get_current_user(auth, db)
+    """Validate Bearer token statelessly."""
+    return await get_current_user(auth)
 
+
+async def get_database():
+    """No database needed since storage is in client-side localStorage."""
+    return None

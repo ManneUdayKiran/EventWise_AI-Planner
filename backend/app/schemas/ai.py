@@ -91,6 +91,9 @@ class AIPlanGenerateRequest(BaseSchema):
     force_fallback: bool = Field(
         default=False, description="Force deterministic sample provider for testing or offline mode"
     )
+    event_context: dict | None = Field(
+        default=None, description="Event context details passed directly from localStorage"
+    )
 
 
 class AIApplyPlanRequest(BaseSchema):

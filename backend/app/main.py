@@ -2,7 +2,6 @@
 
 from contextlib import asynccontextmanager
 
-import pymongo.errors
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,24 +10,16 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.ai.client import ai_http_client
 from app.api.routes.ai import router as ai_router
 from app.api.routes.assistant import router as assistant_router
-from app.api.routes.auth import router as auth_router
-from app.api.routes.budget import router as budget_router
-from app.api.routes.events import router as events_router
-from app.api.routes.tasks import router as tasks_router
-from app.api.routes.vendors import router as vendors_router
 from app.core.config import get_settings
-from app.core.database import db_manager
 from app.core.errors import AppError, app_error_handler
 from app.core.rate_limit import RateLimiterMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager to connect/disconnect MongoDB and clean clients."""
-    await db_manager.connect()
+    """Application lifespan manager to clean clients."""
     yield
     await ai_http_client.close()
-    await db_manager.disconnect()
 
 
 def create_app() -> FastAPI:
@@ -42,17 +33,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS Middleware (Fully supports Vercel, Render, local dev, and custom domains)
-    cors_origins = [o for o in settings.ALLOWED_ORIGINS if o != "*"]
-    cors_regex = settings.ALLOW_ORIGIN_REGEX
-    if "*" in settings.ALLOWED_ORIGINS:
-        cors_regex = r"^https?://.*"
-
+    # CORS Middleware - Permissive for Vercel, localhost, and custom domains
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_origin_regex=cors_regex,
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
@@ -76,32 +61,12 @@ def create_app() -> FastAPI:
     # Custom Exception Handlers with guaranteed CORS header preservation
     app.add_exception_handler(AppError, app_error_handler)
 
-    @app.exception_handler(pymongo.errors.PyMongoError)
-    async def mongo_error_handler(request: Request, exc: pymongo.errors.PyMongoError):
-        origin = request.headers.get("origin")
-        headers = {}
-        if origin:
-            headers["Access-Control-Allow-Origin"] = origin
-            headers["Access-Control-Allow-Credentials"] = "true"
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "detail": (
-                    "Database connection unavailable. Please set MONGODB_URL in your "
-                    "Render dashboard environment variables with your MongoDB Atlas connection string."
-                ),
-                "error": str(exc),
-            },
-            headers=headers,
-        )
-
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        origin = request.headers.get("origin")
-        headers = {}
-        if origin:
-            headers["Access-Control-Allow-Origin"] = origin
-            headers["Access-Control-Allow-Credentials"] = "true"
+        origin = request.headers.get("origin") or "*"
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+        }
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal server error", "error": str(exc)},
@@ -113,18 +78,14 @@ def create_app() -> FastAPI:
     async def health_check():
         return {
             "status": "healthy",
-            "database": "connected" if db_manager.is_connected else "disconnected",
+            "storage": "client-localstorage",
+            "ai_engine": "groq-online",
             "app": settings.APP_NAME,
             "version": "0.1.0",
             "environment": settings.ENVIRONMENT,
         }
 
-    # Mount API v1 Routes
-    app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(events_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(budget_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(tasks_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(vendors_router, prefix=settings.API_V1_PREFIX)
+    # Mount AI and Assistant API v1 Routes
     app.include_router(ai_router, prefix=settings.API_V1_PREFIX)
     app.include_router(assistant_router, prefix=settings.API_V1_PREFIX)
 

@@ -28,26 +28,50 @@ def _round2(val: float) -> float:
 class AIService:
     """Service managing AI event planning workflows."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
-        self.event_repo = EventRepository(db)
-        self.budget_repo = BudgetRepository(db)
-        self.task_repo = TaskRepository(db)
-        self.vendor_repo = VendorRepository(db)
+        if db is not None:
+            self.event_repo = EventRepository(db)
+            self.budget_repo = BudgetRepository(db)
+            self.task_repo = TaskRepository(db)
+            self.vendor_repo = VendorRepository(db)
+        else:
+            self.event_repo = None
+            self.budget_repo = None
+            self.task_repo = None
+            self.vendor_repo = None
 
     async def generate_plan(
         self, event_id: str, user_id: str, req: AIPlanGenerateRequest
     ) -> AIPlanResponse:
-        """Generate structured AI event plan, enforcing ownership and deterministic math."""
-        event = await self.event_repo.find_by_id_and_user(event_id, user_id)
+        """Generate structured AI event plan, using client localStorage context or repository."""
+        event = req.event_context
+        if not event and self.event_repo:
+            try:
+                event = await self.event_repo.find_by_id_and_user(event_id, user_id)
+            except Exception:
+                event = None
+
         if not event:
-            raise NotFoundError(f"Event with ID '{event_id}' not found.")
+            event = {
+                "id": event_id,
+                "name": "Event",
+                "event_type": "wedding",
+                "total_budget": 10000,
+                "expected_guest_count": 50,
+                "event_date": "2026-12-31T00:00:00Z",
+                "location": "Main Venue",
+            }
+
+        event["id"] = event_id
+        if req.focus_areas:
+            event["focus_areas"] = req.focus_areas
 
         # Determine provider
         provider_name = "sample" if req.force_fallback else None
         provider = get_ai_provider(provider_name)
 
-        # Call provider
+        # Call provider (Groq)
         plan = await provider.generate_plan(event)
 
         # Deterministic sanity recalculation: ensure budget allocations don't drift
