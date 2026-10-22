@@ -1,0 +1,7 @@
+python-interpreter-path = "C:/Users/udayk/myenv/Scripts/python.exe"
+search-path = [
+    "."
+]
+site-package-path = [
+    "C:/Users/udayk/myenv/Lib/site-packages"
+]

@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: eventwise-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - eventwise-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eventwise-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - DB_NAME=eventwise_ai
+      - SECRET_KEY=eventwise-super-secret-key-that-is-at-least-32-chars-long!
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - AI_PROVIDER=sample
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ALLOWED_ORIGINS=["http://localhost", "http://localhost:80", "http://localhost:5173", "http://127.0.0.1", "http://127.0.0.1:5173"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - eventwise-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: eventwise-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - eventwise-net
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  eventwise-net:
+    driver: bridge
