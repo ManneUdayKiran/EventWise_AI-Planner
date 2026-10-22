@@ -85,7 +85,7 @@ class AIPlanResponse(BaseSchema):
 class AIPlanGenerateRequest(BaseSchema):
     """Options for AI plan generation."""
 
-    focus_areas: list[str] = Field(
+    focus_areas: list[str] | None = Field(
         default_factory=list, description="Optional areas of emphasis (decor, catering, etc.)"
     )
     force_fallback: bool = Field(

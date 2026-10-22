@@ -48,9 +48,14 @@ class AIService:
             self.vendor_repo = None
 
     async def generate_plan(
-        self, event_id: str, user_id: str, req: AIPlanGenerateRequest
+        self, event_id: str, user_id: str, req: AIPlanGenerateRequest | None = None
     ) -> AIPlanResponse:
         """Generate structured AI event plan, using client localStorage context or repository."""
+        if req is None:
+            req = AIPlanGenerateRequest()
+        elif isinstance(req, dict):
+            req = AIPlanGenerateRequest(**req)
+
         event = req.event_context
         event_repo = self.event_repo
         if not event and event_repo is not None:
@@ -58,6 +63,8 @@ class AIService:
                 event = await event_repo.find_by_id_and_user(event_id, user_id)
             except Exception:
                 event = None
+            if not event:
+                raise NotFoundError(f"Event with ID '{event_id}' not found.")
 
         if not event:
             event = {
@@ -71,8 +78,9 @@ class AIService:
             }
 
         event["id"] = event_id
-        if req.focus_areas:
-            event["focus_areas"] = req.focus_areas
+        focus_areas = getattr(req, "focus_areas", None)
+        if focus_areas:
+            event["focus_areas"] = focus_areas
 
         # Determine provider
         provider_name = "sample" if req.force_fallback else None
