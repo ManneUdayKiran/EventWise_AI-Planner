@@ -4,15 +4,15 @@ from datetime import UTC, datetime
 from typing import Any, overload
 
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
 class BaseRepository:
     """Base repository class for MongoDB collections."""
 
-    def __init__(self, db: AsyncIOMotorDatabase, collection_name: str):
+    def __init__(self, db: AsyncIOMotorDatabase | None, collection_name: str):
         self.db = db
-        self.collection: AsyncIOMotorCollection = db[collection_name]
+        self.collection: Any = db[collection_name] if db is not None else None
 
     @staticmethod
     def to_object_id(id_str: str) -> ObjectId | None:
@@ -46,6 +46,8 @@ class BaseRepository:
 
     async def find_by_id(self, item_id: str) -> dict[str, Any] | None:
         """Find a single document by string ID."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(item_id)
         if not oid:
             return None
@@ -61,13 +63,18 @@ class BaseRepository:
         if "updated_at" not in payload:
             payload["updated_at"] = now
 
-        result = await self.collection.insert_one(payload)
-        payload["id"] = str(result.inserted_id)
+        if self.collection is not None:
+            result = await self.collection.insert_one(payload)
+            payload["id"] = str(result.inserted_id)
+        else:
+            payload["id"] = str(ObjectId())
         payload.pop("_id", None)
         return payload
 
     async def update_by_id(self, item_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """Update a document by string ID."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(item_id)
         if not oid:
             return None
@@ -79,6 +86,8 @@ class BaseRepository:
 
     async def delete_by_id(self, item_id: str) -> bool:
         """Delete a document by string ID."""
+        if self.collection is None:
+            return False
         oid = self.to_object_id(item_id)
         if not oid:
             return False

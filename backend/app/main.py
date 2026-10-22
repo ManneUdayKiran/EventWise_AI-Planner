@@ -10,6 +10,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.ai.client import ai_http_client
 from app.api.routes.ai import router as ai_router
 from app.api.routes.assistant import router as assistant_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.budget import router as budget_router
+from app.api.routes.events import router as events_router
+from app.api.routes.tasks import router as tasks_router
+from app.api.routes.vendors import router as vendors_router
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.rate_limit import RateLimiterMiddleware
@@ -85,7 +90,12 @@ def create_app() -> FastAPI:
             "environment": settings.ENVIRONMENT,
         }
 
-    # Mount AI and Assistant API v1 Routes
+    # Mount API v1 Routes
+    app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(events_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(budget_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(tasks_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(vendors_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ai_router, prefix=settings.API_V1_PREFIX)
     app.include_router(assistant_router, prefix=settings.API_V1_PREFIX)
 

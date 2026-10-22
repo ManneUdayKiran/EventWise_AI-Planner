@@ -131,6 +131,8 @@ export const AIPlanModal: React.FC<AIPlanModalProps> = ({
       onClose={loading || applying ? undefined : onClose}
       maxWidth="lg"
       fullWidth
+      aria-labelledby="ai-plan-modal-title"
+      aria-describedby="ai-plan-modal-description"
       PaperProps={{
         sx: {
           bgcolor: "#0f172a",
@@ -167,10 +169,18 @@ export const AIPlanModal: React.FC<AIPlanModalProps> = ({
             <AutoAwesomeIcon sx={{ color: "#fff", fontSize: 22 }} />
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>
+            <Typography
+              id="ai-plan-modal-title"
+              variant="h6"
+              sx={{ fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}
+            >
               AI Event Blueprint Generator
             </Typography>
-            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+            <Typography
+              id="ai-plan-modal-description"
+              variant="caption"
+              sx={{ color: "text.secondary" }}
+            >
               Generates tailored themes, deterministic budget allocations, milestone tasks, and vendor checklists.
             </Typography>
           </Box>

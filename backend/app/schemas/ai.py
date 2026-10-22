@@ -9,8 +9,6 @@ from app.schemas.common import BaseSchema
 from app.schemas.task import TaskPriority
 from app.schemas.vendor import VendorCategory
 
-UTC = UTC
-
 
 class AIBudgetItemProposal(BaseSchema):
     """Proposed item for event budget."""

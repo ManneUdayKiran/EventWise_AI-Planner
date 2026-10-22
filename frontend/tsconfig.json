@@ -7,14 +7,14 @@
     "skipLibCheck": true,
 
     /* Resolution mode */
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["vite/client", "vitest/globals"],
+    "types": ["vite/client"],
 
     /* Linting */
     "strict": true,

@@ -1,6 +1,7 @@
 """Task and planning timeline business service."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -20,7 +21,7 @@ from app.schemas.task import (
 class TaskService:
     """Service handling task creation, dependency management, overdue checks, and rescheduling."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
         self.task_repo = TaskRepository(db)
         self.event_repo = EventRepository(db)
@@ -92,15 +93,15 @@ class TaskService:
         if due.tzinfo is None:
             due = due.replace(tzinfo=UTC)
 
-        data = {
+        data: dict[str, Any] = {
             "event_id": event_id,
             "user_id": user_id,
             "title": req.title.strip(),
             "description": req.description.strip() if req.description else None,
             "category": req.category.strip(),
             "due_date": due,
-            "priority": req.priority.value,
-            "status": TaskStatus.PENDING.value,
+            "priority": str(getattr(req.priority, "value", req.priority)),
+            "status": str(getattr(TaskStatus.PENDING, "value", "pending")),
             "dependencies": req.dependencies,
         }
 
@@ -117,7 +118,7 @@ class TaskService:
         if not existing:
             raise NotFoundError("Task not found or unauthorized.")
 
-        updates = {}
+        updates: dict[str, Any] = {}
         if req.title is not None:
             updates["title"] = req.title.strip()
         if req.description is not None:
@@ -130,10 +131,11 @@ class TaskService:
                 due = due.replace(tzinfo=UTC)
             updates["due_date"] = due
         if req.priority is not None:
-            updates["priority"] = req.priority.value
+            updates["priority"] = str(getattr(req.priority, "value", req.priority))
         if req.status is not None:
             # Check dependencies if trying to complete
-            if req.status == TaskStatus.COMPLETED and existing.get("dependencies"):
+            status_val = str(getattr(req.status, "value", req.status))
+            if status_val == TaskStatus.COMPLETED.value and existing.get("dependencies"):
                 # Ensure all dependency tasks are completed
                 for dep_id in existing["dependencies"]:
                     dep_task = await self.task_repo.find_by_id_and_event(dep_id, event_id, user_id)
@@ -141,7 +143,7 @@ class TaskService:
                         raise ValidationError(
                             f"Cannot complete task: Dependent task '{dep_task.get('title')}' is not yet completed."
                         )
-            updates["status"] = req.status.value
+            updates["status"] = status_val
         if req.dependencies is not None:
             # Prevent self-dependency
             if task_id in req.dependencies:
@@ -165,11 +167,12 @@ class TaskService:
         if not deleted:
             raise NotFoundError("Task not found or unauthorized.")
 
-        # Remove deleted task_id from other tasks' dependency lists
-        await self.db.tasks.update_many(
-            {"event_id": event_id, "dependencies": task_id},
-            {"$pull": {"dependencies": task_id}},
-        )
+        # Remove deleted task_id from other tasks' dependency lists if database connected
+        if self.db is not None:
+            await self.db.tasks.update_many(
+                {"event_id": event_id, "dependencies": task_id},
+                {"$pull": {"dependencies": task_id}},
+            )
         return True
 
     async def reschedule_timeline(

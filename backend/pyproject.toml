@@ -22,3 +22,7 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning"
 ]
+
+[tool.pyright]
+include = ["app", "tests"]
+reportInvalidTypeForm = "none"

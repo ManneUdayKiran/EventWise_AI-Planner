@@ -1,10 +1,12 @@
 """Deterministic budget calculation and expense management service."""
 
 from collections import defaultdict
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.errors import NotFoundError, ValidationError
+from app.core.utils import round_currency
 from app.repositories.budget_repo import BudgetRepository
 from app.repositories.event_repo import EventRepository
 from app.schemas.budget import (
@@ -19,7 +21,7 @@ from app.schemas.budget import (
 class BudgetService:
     """Service performing deterministic mathematical calculations for event budgets."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
         self.budget_repo = BudgetRepository(db)
         self.event_repo = EventRepository(db)
@@ -32,20 +34,20 @@ class BudgetService:
 
         items_raw = await self.budget_repo.find_all_by_event(event_id, user_id)
 
-        total_budget = round(float(event.get("total_budget", 0.0)), 2)
+        total_budget = round_currency(event.get("total_budget", 0.0))
         guest_count = int(event.get("expected_guest_count", 0))
         currency = str(event.get("currency", "INR"))
 
         total_estimated = 0.0
         total_actual = 0.0
-        category_map: dict[str, dict[str, float]] = defaultdict(
+        category_map: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"estimated": 0.0, "actual": 0.0, "count": 0}
         )
 
         items_resp: list[BudgetItemResponse] = []
         for raw in items_raw:
-            est = round(float(raw.get("estimated_amount", 0.0)), 2)
-            act = round(float(raw.get("actual_amount", 0.0)), 2)
+            est = round_currency(raw.get("estimated_amount", 0.0))
+            act = round_currency(raw.get("actual_amount", 0.0))
             cat = str(raw.get("category", "miscellaneous"))
 
             total_estimated += est
@@ -71,36 +73,36 @@ class BudgetService:
                 )
             )
 
-        total_estimated = round(total_estimated, 2)
-        total_actual = round(total_actual, 2)
+        total_estimated = round_currency(total_estimated)
+        total_actual = round_currency(total_actual)
 
         # Invariants: remaining budget
         if total_actual > 0:
-            remaining_budget = round(total_budget - total_actual, 2)
+            remaining_budget = round_currency(total_budget - total_actual)
             is_overspent = total_actual > total_budget
-            overspent_amount = round(max(0.0, total_actual - total_budget), 2)
+            overspent_amount = round_currency(max(0.0, total_actual - total_budget))
         else:
-            remaining_budget = round(total_budget - total_estimated, 2)
+            remaining_budget = round_currency(total_budget - total_estimated)
             is_overspent = total_estimated > total_budget
-            overspent_amount = round(max(0.0, total_estimated - total_budget), 2)
+            overspent_amount = round_currency(max(0.0, total_estimated - total_budget))
 
         # Zero guest count safety rule
         if guest_count > 0:
             eff_amount = total_actual if total_actual > 0 else total_estimated
-            cost_per_guest = round(eff_amount / guest_count, 2)
+            cost_per_guest = round_currency(eff_amount / guest_count)
         else:
             cost_per_guest = 0.0
 
         # Zero total budget safety rule
         if total_budget > 0.0:
-            utilization_percentage = round((total_actual / total_budget) * 100, 2)
+            utilization_percentage = round_currency((total_actual / total_budget) * 100)
         else:
             utilization_percentage = 0.0
 
         breakdown = {
             cat: CategoryBreakdown(
-                estimated=round(stats["estimated"], 2),
-                actual=round(stats["actual"], 2),
+                estimated=round_currency(stats["estimated"]),
+                actual=round_currency(stats["actual"]),
                 count=int(stats["count"]),
             )
             for cat, stats in category_map.items()
@@ -131,15 +133,15 @@ class BudgetService:
         if req.estimated_amount < 0.0 or req.actual_amount < 0.0:
             raise ValidationError("Budget item amounts cannot be negative.")
 
-        data = {
+        data: dict[str, Any] = {
             "event_id": event_id,
             "user_id": user_id,
-            "category": req.category.value,
+            "category": str(getattr(req.category, "value", req.category)),
             "item_name": req.item_name.strip(),
-            "estimated_amount": round(float(req.estimated_amount), 2),
-            "actual_amount": round(float(req.actual_amount), 2),
+            "estimated_amount": round_currency(req.estimated_amount),
+            "actual_amount": round_currency(req.actual_amount),
             "notes": req.notes.strip() if req.notes else None,
-            "status": req.status.value,
+            "status": str(getattr(req.status, "value", req.status)),
         }
         doc = await self.budget_repo.insert(data)
         return BudgetItemResponse(**doc)
@@ -152,23 +154,23 @@ class BudgetService:
         if not existing:
             raise NotFoundError("Budget item not found or unauthorized.")
 
-        updates = {}
+        updates: dict[str, Any] = {}
         if req.category is not None:
-            updates["category"] = req.category.value
+            updates["category"] = str(getattr(req.category, "value", req.category))
         if req.item_name is not None:
             updates["item_name"] = req.item_name.strip()
         if req.estimated_amount is not None:
             if req.estimated_amount < 0.0:
                 raise ValidationError("Estimated amount cannot be negative.")
-            updates["estimated_amount"] = round(float(req.estimated_amount), 2)
+            updates["estimated_amount"] = round_currency(req.estimated_amount)
         if req.actual_amount is not None:
             if req.actual_amount < 0.0:
                 raise ValidationError("Actual amount cannot be negative.")
-            updates["actual_amount"] = round(float(req.actual_amount), 2)
+            updates["actual_amount"] = round_currency(req.actual_amount)
         if req.notes is not None:
             updates["notes"] = req.notes.strip() if req.notes else None
         if req.status is not None:
-            updates["status"] = req.status.value
+            updates["status"] = str(getattr(req.status, "value", req.status))
 
         updated_doc = await self.budget_repo.update_by_id_and_event(
             item_id, event_id, user_id, updates

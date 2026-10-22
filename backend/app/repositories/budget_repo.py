@@ -11,11 +11,13 @@ from app.repositories.base import BaseRepository
 class BudgetRepository(BaseRepository):
     """Repository handling BudgetItem document persistence."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None):
         super().__init__(db, "budget_items")
 
     async def find_all_by_event(self, event_id: str, user_id: str) -> list[dict[str, Any]]:
         """List all budget items for an event owned by user."""
+        if self.collection is None:
+            return []
         cursor = self.collection.find({"event_id": event_id, "user_id": user_id}).sort(
             "category", 1
         )
@@ -26,6 +28,8 @@ class BudgetRepository(BaseRepository):
         self, item_id: str, event_id: str, user_id: str
     ) -> dict[str, Any] | None:
         """Retrieve single budget item enforcing event and ownership."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(item_id)
         if not oid:
             return None
@@ -36,6 +40,8 @@ class BudgetRepository(BaseRepository):
         self, item_id: str, event_id: str, user_id: str, updates: dict[str, Any]
     ) -> dict[str, Any] | None:
         """Update a budget item enforcing event and ownership."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(item_id)
         if not oid:
             return None
@@ -52,6 +58,8 @@ class BudgetRepository(BaseRepository):
 
     async def delete_by_id_and_event(self, item_id: str, event_id: str, user_id: str) -> bool:
         """Delete a single budget item enforcing event and ownership."""
+        if self.collection is None:
+            return False
         oid = self.to_object_id(item_id)
         if not oid:
             return False

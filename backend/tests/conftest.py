@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -48,13 +49,12 @@ async def test_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
 @pytest_asyncio.fixture
 async def client(test_db: AsyncIOMotorDatabase) -> AsyncGenerator[AsyncClient, None]:
     """Provide an asynchronous HTTPX test client bound to FastAPI ASGI app."""
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app)  # type: ignore[arg-type]
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
-
 @pytest_asyncio.fixture
-async def sample_user(test_db: AsyncIOMotorDatabase) -> dict[str, str]:
+async def sample_user(test_db: AsyncIOMotorDatabase) -> dict[str, Any]:
     """Seed a sample user in the test database and return auth credentials."""
     user_data = {
         "email": "planner@example.com",
@@ -65,7 +65,10 @@ async def sample_user(test_db: AsyncIOMotorDatabase) -> dict[str, str]:
     }
     result = await test_db.users.insert_one(user_data)
     user_id = str(result.inserted_id)
-    token = create_access_token(subject=user_id)
+    token = create_access_token(
+        subject=user_id,
+        claims={"email": user_data["email"], "full_name": user_data["full_name"]},
+    )
     return {
         "id": user_id,
         "email": "planner@example.com",
@@ -75,7 +78,7 @@ async def sample_user(test_db: AsyncIOMotorDatabase) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture
-async def other_user(test_db: AsyncIOMotorDatabase) -> dict[str, str]:
+async def other_user(test_db: AsyncIOMotorDatabase) -> dict[str, Any]:
     """Seed a second distinct user in the test database for cross-tenant tests."""
     user_data = {
         "email": "other@example.com",
@@ -86,7 +89,10 @@ async def other_user(test_db: AsyncIOMotorDatabase) -> dict[str, str]:
     }
     result = await test_db.users.insert_one(user_data)
     user_id = str(result.inserted_id)
-    token = create_access_token(subject=user_id)
+    token = create_access_token(
+        subject=user_id,
+        claims={"email": user_data["email"], "full_name": user_data["full_name"]},
+    )
     return {
         "id": user_id,
         "email": "other@example.com",

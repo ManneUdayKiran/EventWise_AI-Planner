@@ -1,6 +1,7 @@
 """Database manager (MongoDB removed in favor of client-side localStorage)."""
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -8,10 +9,14 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Mock/stateless database manager - client-side localStorage handles persistence."""
 
+    client: Any = None
+    db: Any = None
+    is_connected: bool = True
+
     def __init__(self):
         self.client = None
         self.db = None
-        self.is_connected: bool = True
+        self.is_connected = True
 
     async def connect(self, mongodb_url: str | None = None, db_name: str | None = None):
         """No-op connection since persistence is handled by client-side localStorage."""

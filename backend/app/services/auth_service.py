@@ -18,7 +18,9 @@ from app.schemas.user import TokenResponse, UserLoginRequest, UserRegisterReques
 class AuthService:
     """Service encapsulating user registration, authentication, and token issuance."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    db: AsyncIOMotorDatabase | None
+
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
         self.user_repo = UserRepository(db)
 

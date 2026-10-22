@@ -1,10 +1,12 @@
 """Event management business service with aggregation metrics."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.errors import NotFoundError, ValidationError
+from app.core.utils import round_currency
 from app.repositories.budget_repo import BudgetRepository
 from app.repositories.event_repo import EventRepository
 from app.repositories.task_repo import TaskRepository
@@ -22,7 +24,7 @@ from app.schemas.event import (
 class EventService:
     """Service handling Event CRUD, multi-tenant ownership, and summary statistics."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
         self.event_repo = EventRepository(db)
         self.budget_repo = BudgetRepository(db)
@@ -40,21 +42,21 @@ class EventService:
         if event_date.tzinfo is None:
             event_date = event_date.replace(tzinfo=UTC)
 
-        data = {
+        data: dict[str, Any] = {
             "user_id": user_id,
             "name": req.name.strip(),
-            "event_type": req.event_type.value if hasattr(req.event_type, "value") else str(req.event_type).strip(),
+            "event_type": str(getattr(req.event_type, "value", req.event_type)).strip(),
             "event_date": event_date,
             "location": req.location.strip(),
             "expected_guest_count": req.expected_guest_count,
-            "total_budget": round(float(req.total_budget), 2),
+            "total_budget": round_currency(req.total_budget),
             "currency": req.currency.upper().strip(),
             "theme": req.theme.strip() if req.theme else None,
             "preferences": req.preferences.strip() if req.preferences else None,
             "special_requirements": req.special_requirements.strip()
             if req.special_requirements
             else None,
-            "status": EventStatus.PLANNING.value,
+            "status": str(getattr(EventStatus.PLANNING, "value", "planning")),
         }
 
         doc = await self.event_repo.insert(data)
@@ -75,7 +77,7 @@ class EventService:
 
             allocated = sum(b.get("estimated_amount", 0.0) for b in budget_items)
             spent = sum(b.get("actual_amount", 0.0) for b in budget_items)
-            rem = round(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated), 2)
+            rem = round_currency(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated))
 
             total_t = len(tasks)
             completed_t = sum(1 for t in tasks if t.get("status") == "completed")
@@ -93,8 +95,8 @@ class EventService:
             pct = round((completed_t / total_t * 100), 1) if total_t > 0 else 0.0
 
             stats = EventSummaryStats(
-                budget_allocated=round(allocated, 2),
-                budget_spent=round(spent, 2),
+                budget_allocated=round_currency(allocated),
+                budget_spent=round_currency(spent),
                 budget_remaining=rem,
                 total_tasks=total_t,
                 completed_tasks=completed_t,
@@ -121,7 +123,7 @@ class EventService:
 
         allocated = sum(b.get("estimated_amount", 0.0) for b in budget_items)
         spent = sum(b.get("actual_amount", 0.0) for b in budget_items)
-        rem = round(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated), 2)
+        rem = round_currency(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated))
 
         total_t = len(tasks)
         completed_t = sum(1 for t in tasks if t.get("status") == "completed")
@@ -137,8 +139,8 @@ class EventService:
         pct = round((completed_t / total_t * 100), 1) if total_t > 0 else 0.0
 
         stats = EventSummaryStats(
-            budget_allocated=round(allocated, 2),
-            budget_spent=round(spent, 2),
+            budget_allocated=round_currency(allocated),
+            budget_spent=round_currency(spent),
             budget_remaining=rem,
             total_tasks=total_t,
             completed_tasks=completed_t,
@@ -158,11 +160,11 @@ class EventService:
         if not existing:
             raise NotFoundError("Event not found or unauthorized.")
 
-        updates = {}
+        updates: dict[str, Any] = {}
         if req.name is not None:
             updates["name"] = req.name.strip()
         if req.event_type is not None:
-            updates["event_type"] = req.event_type.value if hasattr(req.event_type, "value") else str(req.event_type).strip()
+            updates["event_type"] = str(getattr(req.event_type, "value", req.event_type)).strip()
         if req.event_date is not None:
             due = req.event_date
             if due.tzinfo is None:
@@ -177,7 +179,7 @@ class EventService:
         if req.total_budget is not None:
             if req.total_budget < 0.0:
                 raise ValidationError("Total budget cannot be negative.")
-            updates["total_budget"] = round(float(req.total_budget), 2)
+            updates["total_budget"] = round_currency(req.total_budget)
         if req.currency is not None:
             updates["currency"] = req.currency.upper().strip()
         if req.theme is not None:
@@ -189,7 +191,7 @@ class EventService:
                 req.special_requirements.strip() if req.special_requirements else None
             )
         if req.status is not None:
-            updates["status"] = req.status.value
+            updates["status"] = str(getattr(req.status, "value", req.status))
 
         updated = await self.event_repo.update_by_id_and_user(event_id, user_id, updates)
         if not updated:

@@ -806,6 +806,7 @@ export const DashboardPage: React.FC = () => {
                         <Tooltip title="Edit Event Details">
                           <IconButton
                             size="small"
+                            aria-label={`Edit ${ev.name}`}
                             onClick={() => handleOpenEdit(ev)}
                             sx={{ color: "text.secondary", "&:hover": { color: "primary.light" } }}
                           >
@@ -815,6 +816,7 @@ export const DashboardPage: React.FC = () => {
                         <Tooltip title="Delete Event">
                           <IconButton
                             size="small"
+                            aria-label={`Delete ${ev.name}`}
                             onClick={() => {
                               setEventToDelete(ev);
                               setDeleteDialogOpen(true);

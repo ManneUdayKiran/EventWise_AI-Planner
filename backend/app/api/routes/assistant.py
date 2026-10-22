@@ -28,7 +28,7 @@ router = APIRouter(tags=["Conversational Assistant"])
 )
 async def send_assistant_message(
     event_id: str = "custom",
-    req: AssistantMessageRequest = None,  # type: ignore
+    req: AssistantMessageRequest | None = None,
 ) -> AssistantResponse:
     """Submit a conversational modification request or query for targeted event planning changes."""
     service = AssistantService()

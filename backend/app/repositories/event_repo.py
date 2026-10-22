@@ -11,17 +11,21 @@ from app.repositories.base import BaseRepository
 class EventRepository(BaseRepository):
     """Repository handling Event document persistence."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None):
         super().__init__(db, "events")
 
     async def find_all_by_user(self, user_id: str) -> list[dict[str, Any]]:
         """List all events belonging to a user, sorted newest first."""
+        if self.collection is None:
+            return []
         cursor = self.collection.find({"user_id": user_id}).sort("created_at", -1)
         docs = await cursor.to_list(length=100)
         return [self.serialize_doc(doc) for doc in docs if doc is not None]
 
     async def find_by_id_and_user(self, event_id: str, user_id: str) -> dict[str, Any] | None:
         """Find an event by ID enforcing user ownership."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(event_id)
         if not oid:
             return None
@@ -32,6 +36,8 @@ class EventRepository(BaseRepository):
         self, event_id: str, user_id: str, updates: dict[str, Any]
     ) -> dict[str, Any] | None:
         """Update an event by ID enforcing user ownership."""
+        if self.collection is None:
+            return None
         oid = self.to_object_id(event_id)
         if not oid:
             return None
@@ -48,6 +54,8 @@ class EventRepository(BaseRepository):
 
     async def delete_cascade(self, event_id: str, user_id: str) -> bool:
         """Delete an event and cascade deletion to its budget items, tasks, and vendors."""
+        if self.collection is None or self.db is None:
+            return False
         oid = self.to_object_id(event_id)
         if not oid:
             return False

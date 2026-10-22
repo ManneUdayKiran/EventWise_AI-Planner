@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.errors import UnauthorizedError
 from app.core.security import decode_access_token
 from app.schemas.user import UserResponse
 
@@ -42,8 +43,21 @@ async def get_current_user(
 async def get_strict_current_user(
     auth: HTTPAuthorizationCredentials = Depends(security_scheme),
 ) -> UserResponse:
-    """Validate Bearer token statelessly."""
-    return await get_current_user(auth)
+    """Validate Bearer token strictly, rejecting missing or invalid tokens with 401."""
+    if not auth or not auth.credentials:
+        raise UnauthorizedError("Authentication token is required.")
+
+    payload = decode_access_token(auth.credentials)
+    if not payload or "sub" not in payload:
+        raise UnauthorizedError("Invalid or expired authentication token.")
+
+    return UserResponse(
+        id=payload["sub"],
+        email=payload.get("email", "planner@eventwise.ai"),
+        full_name=payload.get("full_name", "Event Planner"),
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
 
 
 async def get_database():

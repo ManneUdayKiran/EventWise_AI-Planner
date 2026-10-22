@@ -941,6 +941,7 @@ export const EventWorkspacePage: React.FC = () => {
                               <IconButton
                                 size="small"
                                 color="error"
+                                aria-label={`Delete budget item ${item.item_name}`}
                                 onClick={() => handleDeleteBudgetItem(item.id)}
                               >
                                 <DeleteOutlineIcon fontSize="small" />
@@ -1115,7 +1116,12 @@ export const EventWorkspacePage: React.FC = () => {
                                   : "text.secondary",
                             }}
                           />
-                          <IconButton size="small" color="error" onClick={() => handleDeleteTask(task.id)}>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={`Delete task ${task.title}`}
+                            onClick={() => handleDeleteTask(task.id)}
+                          >
                             <DeleteOutlineIcon fontSize="small" />
                           </IconButton>
                         </Box>
@@ -1267,6 +1273,7 @@ export const EventWorkspacePage: React.FC = () => {
                                     <IconButton
                                       size="small"
                                       color="error"
+                                      aria-label={`Delete vendor ${vendor.item_name}`}
                                       onClick={() => handleDeleteVendor(vendor.id)}
                                     >
                                       <DeleteOutlineIcon fontSize="small" />

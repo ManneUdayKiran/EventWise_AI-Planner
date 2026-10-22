@@ -1,9 +1,9 @@
 """Deterministic sample AI plan provider for offline resilience and reliable fallbacks."""
 
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.ai.providers.base import BaseAIProvider
+from app.core.utils import round_currency as _round2
 from app.schemas.ai import (
     AIBudgetItemProposal,
     AIPlanResponse,
@@ -13,10 +13,6 @@ from app.schemas.ai import (
 from app.schemas.budget import BudgetCategory
 from app.schemas.task import TaskPriority
 from app.schemas.vendor import VendorCategory
-
-
-def _round2(val: float) -> float:
-    return float(Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 class SampleAIProvider(BaseAIProvider):

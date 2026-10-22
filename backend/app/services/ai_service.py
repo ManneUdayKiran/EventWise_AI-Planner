@@ -1,12 +1,13 @@
-"""AI service coordinating plan generation, deterministic budget validation, and plan application."""
-
+import logging
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.ai.factory import get_ai_provider
+from app.ai.providers.sample_provider import SampleAIProvider
 from app.core.errors import NotFoundError
+from app.core.utils import round_currency
 from app.repositories.budget_repo import BudgetRepository
 from app.repositories.event_repo import EventRepository
 from app.repositories.task_repo import TaskRepository
@@ -18,11 +19,7 @@ from app.schemas.ai import (
     AIPlanResponse,
 )
 
-UTC = UTC
-
-
-def _round2(val: float) -> float:
-    return float(Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -66,8 +63,9 @@ class AIService:
             if not event:
                 raise NotFoundError(f"Event with ID '{event_id}' not found.")
 
+        event_dict: dict[str, Any]
         if not event:
-            event = {
+            event_dict = {
                 "id": event_id,
                 "name": "Event",
                 "event_type": "wedding",
@@ -76,24 +74,45 @@ class AIService:
                 "event_date": "2026-12-31T00:00:00Z",
                 "location": "Main Venue",
             }
+        elif isinstance(event, dict):
+            event_dict = dict(event)
+        elif hasattr(event, "model_dump"):
+            event_dict = event.model_dump()  # type: ignore
+        elif hasattr(event, "dict"):
+            event_dict = event.dict()  # type: ignore
+        else:
+            try:
+                event_dict = dict(event)  # type: ignore
+            except Exception:
+                event_dict = {"id": event_id}
 
-        event["id"] = event_id
-        focus_areas = getattr(req, "focus_areas", None)
+        event_dict["id"] = event_id
+        focus_areas = getattr(req, "focus_areas", None) or getattr(req, "focus_aeas", None)
         if focus_areas:
-            event["focus_areas"] = focus_areas
+            event_dict["focus_areas"] = focus_areas
 
         # Determine provider
         provider_name = "sample" if req.force_fallback else None
         provider = get_ai_provider(provider_name)
 
-        # Call provider (Groq)
-        plan = await provider.generate_plan(event)
+        # Call provider with automatic fallback on failure
+        try:
+            plan = await provider.generate_plan(event_dict)
+        except Exception as err:
+            logger.warning(
+                "Primary AI provider '%s' failed (%s). Activating deterministic fallback provider.",
+                getattr(provider, "provider_name", "unknown"),
+                err,
+            )
+            fallback_provider = SampleAIProvider()
+            plan = await fallback_provider.generate_plan(event_dict)
+            plan.is_fallback = True
 
         # Deterministic sanity recalculation: ensure budget allocations don't drift
         for alloc in plan.budget_allocations:
-            alloc.estimated_amount = _round2(alloc.estimated_amount)
+            alloc.estimated_amount = round_currency(alloc.estimated_amount)
 
-        plan.total_proposed_budget = _round2(
+        plan.total_proposed_budget = round_currency(
             sum(item.estimated_amount for item in plan.budget_allocations)
         )
 
@@ -151,7 +170,7 @@ class AIService:
                         if hasattr(b_item.category, "value")
                         else str(b_item.category),
                         "item_name": b_item.item_name,
-                        "estimated_amount": _round2(b_item.estimated_amount),
+                        "estimated_amount": round_currency(b_item.estimated_amount),
                         "actual_amount": 0.0,
                         "notes": b_item.notes,
                         "status": "planned",
@@ -191,7 +210,7 @@ class AIService:
                         if hasattr(v_item.category, "value")
                         else str(v_item.category),
                         "item_name": v_item.item_name,
-                        "quotation_amount": _round2(v_item.estimated_budget),
+                        "quotation_amount": round_currency(v_item.estimated_budget),
                         "booking_status": "not_started",
                         "payment_status": "unpaid",
                         "notes": v_item.suggested_scope,

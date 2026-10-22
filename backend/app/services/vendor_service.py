@@ -1,10 +1,12 @@
 """Vendor checklist and quotation tracking business service."""
 
 from collections import defaultdict
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.errors import NotFoundError, ValidationError
+from app.core.utils import round_currency
 from app.repositories.event_repo import EventRepository
 from app.repositories.vendor_repo import VendorRepository
 from app.schemas.vendor import (
@@ -19,7 +21,7 @@ from app.schemas.vendor import (
 class VendorService:
     """Service handling vendor checklist items, quotation comparisons, and bookings."""
 
-    def __init__(self, db: AsyncIOMotorDatabase):
+    def __init__(self, db: AsyncIOMotorDatabase | None = None):
         self.db = db
         self.vendor_repo = VendorRepository(db)
         self.event_repo = EventRepository(db)
@@ -38,9 +40,9 @@ class VendorService:
         total_quoted = 0.0
 
         for r in raw_items:
-            quote = round(float(r.get("quotation_amount", 0.0)), 2)
+            quote = round_currency(r.get("quotation_amount", 0.0))
             total_quoted += quote
-            if r.get("booking_status") == BookingStatus.BOOKED.value:
+            if str(r.get("booking_status")) == str(getattr(BookingStatus.BOOKED, "value", BookingStatus.BOOKED)):
                 booked_count += 1
 
             item = VendorItemResponse(
@@ -64,7 +66,7 @@ class VendorService:
             items=items_resp,
             total_vendors=len(items_resp),
             booked_count=booked_count,
-            total_quoted_amount=round(total_quoted, 2),
+            total_quoted_amount=round_currency(total_quoted),
             items_by_category=dict(by_category),
         )
 
@@ -79,14 +81,14 @@ class VendorService:
         if req.quotation_amount < 0.0:
             raise ValidationError("Quotation amount cannot be negative.")
 
-        data = {
+        data: dict[str, Any] = {
             "event_id": event_id,
             "user_id": user_id,
-            "category": req.category.value,
+            "category": str(getattr(req.category, "value", req.category)),
             "item_name": req.item_name.strip(),
-            "quotation_amount": round(float(req.quotation_amount), 2),
-            "booking_status": req.booking_status.value,
-            "payment_status": req.payment_status.value,
+            "quotation_amount": round_currency(req.quotation_amount),
+            "booking_status": str(getattr(req.booking_status, "value", req.booking_status)),
+            "payment_status": str(getattr(req.payment_status, "value", req.payment_status)),
             "notes": req.notes.strip() if req.notes else None,
             "contact_info": req.contact_info.strip() if req.contact_info else None,
         }
@@ -102,19 +104,19 @@ class VendorService:
         if not existing:
             raise NotFoundError("Vendor item not found or unauthorized.")
 
-        updates = {}
+        updates: dict[str, Any] = {}
         if req.category is not None:
-            updates["category"] = req.category.value
+            updates["category"] = str(getattr(req.category, "value", req.category))
         if req.item_name is not None:
             updates["item_name"] = req.item_name.strip()
         if req.quotation_amount is not None:
             if req.quotation_amount < 0.0:
                 raise ValidationError("Quotation amount cannot be negative.")
-            updates["quotation_amount"] = round(float(req.quotation_amount), 2)
+            updates["quotation_amount"] = round_currency(req.quotation_amount)
         if req.booking_status is not None:
-            updates["booking_status"] = req.booking_status.value
+            updates["booking_status"] = str(getattr(req.booking_status, "value", req.booking_status))
         if req.payment_status is not None:
-            updates["payment_status"] = req.payment_status.value
+            updates["payment_status"] = str(getattr(req.payment_status, "value", req.payment_status))
         if req.notes is not None:
             updates["notes"] = req.notes.strip() if req.notes else None
         if req.contact_info is not None:

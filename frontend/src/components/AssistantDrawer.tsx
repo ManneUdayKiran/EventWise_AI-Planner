@@ -336,6 +336,9 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
 
       {/* Chat Messages Stream */}
       <Box
+        role="log"
+        aria-live="polite"
+        aria-label="EventWise Copilot message history"
         sx={{
           flex: 1,
           overflowY: "auto",
@@ -670,6 +673,7 @@ export const AssistantDrawer: React.FC<AssistantDrawerProps> = ({
             fullWidth
             size="small"
             placeholder="Ask a question or request a modification..."
+            inputProps={{ "aria-label": "Message prompt for AI assistant" }}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {

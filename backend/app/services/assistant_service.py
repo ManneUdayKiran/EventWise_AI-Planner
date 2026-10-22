@@ -4,7 +4,6 @@ import json
 import logging
 import re
 from datetime import UTC, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from bson import ObjectId
@@ -13,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.ai.client import ai_http_client
 from app.core.config import get_settings
 from app.core.errors import NotFoundError, ValidationError
+from app.core.utils import round_currency
 from app.schemas.assistant import (
     AssistantConfirmResponse,
     AssistantMessageLog,
@@ -31,10 +31,13 @@ from app.schemas.vendor import VendorCategory
 logger = logging.getLogger(__name__)
 
 
-def _round_currency(amount: float) -> float:
-    """Deterministic rounding to 2 decimal places using ROUND_HALF_UP."""
-    dec = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return float(dec)
+def _safe_get(item: Any, key: str, default: Any = None) -> Any:
+    """Safely get attribute or key from dict, Pydantic model, or object."""
+    if item is None:
+        return default
+    if isinstance(item, dict):
+        return item.get(key, default)
+    return getattr(item, key, default)
 
 
 class AssistantService:
@@ -210,7 +213,7 @@ class AssistantService:
     ) -> tuple[str, ProposedChanges | None, bool]:
         """Query Gemini API with strict schema instructions."""
         budget_summary_str = ", ".join(
-            f"{b.get('category')}: ${b.get('estimated_amount')}" for b in budget_items[:10]
+            f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}" for b in budget_items[:10]
         ) or "None recorded"
 
         system_instruction = (
@@ -234,11 +237,11 @@ class AssistantService:
 
         user_content = (
             f"Event Context:\n"
-            f"- Name: {event.get('name')}\n"
-            f"- Type: {event.get('event_type')}\n"
-            f"- Date: {event.get('event_date')}\n"
-            f"- Guests: {event.get('expected_guest_count')}\n"
-            f"- Total Budget: ${event.get('total_budget')}\n"
+            f"- Name: {_safe_get(event, 'name')}\n"
+            f"- Type: {_safe_get(event, 'event_type')}\n"
+            f"- Date: {_safe_get(event, 'event_date')}\n"
+            f"- Guests: {_safe_get(event, 'expected_guest_count')}\n"
+            f"- Total Budget: ${_safe_get(event, 'total_budget')}\n"
             f"- Current Budget Allocations: {budget_summary_str}\n"
             f"- Current Tasks Count: {len(tasks)}\n"
             f"- Current Vendors Count: {len(vendors)}\n\n"
@@ -288,7 +291,7 @@ class AssistantService:
     ) -> tuple[str, ProposedChanges | None, bool]:
         """Query Groq API using JSON mode and openai/gpt-oss model."""
         budget_summary_str = ", ".join(
-            f"{b.get('category')}: ${b.get('estimated_amount')}" for b in budget_items[:10]
+            f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}" for b in budget_items[:10]
         ) or "None recorded"
 
         system_instruction = (
@@ -312,11 +315,11 @@ class AssistantService:
 
         user_content = (
             f"Event Context:\n"
-            f"- Name: {event.get('name')}\n"
-            f"- Type: {event.get('event_type')}\n"
-            f"- Date: {event.get('event_date')}\n"
-            f"- Guests: {event.get('expected_guest_count')}\n"
-            f"- Total Budget: ${event.get('total_budget')}\n"
+            f"- Name: {_safe_get(event, 'name')}\n"
+            f"- Type: {_safe_get(event, 'event_type')}\n"
+            f"- Date: {_safe_get(event, 'event_date')}\n"
+            f"- Guests: {_safe_get(event, 'expected_guest_count')}\n"
+            f"- Total Budget: ${_safe_get(event, 'total_budget')}\n"
             f"- Current Budget Allocations: {budget_summary_str}\n"
             f"- Current Tasks Count: {len(tasks)}\n"
             f"- Current Vendors Count: {len(vendors)}\n\n"
@@ -374,7 +377,7 @@ class AssistantService:
         p_lower = prompt.lower()
         now = datetime.now(UTC)
 
-        raw_event_date = event.get("event_date")
+        raw_event_date = _safe_get(event, "event_date")
         if isinstance(raw_event_date, str):
             try:
                 event_date = datetime.fromisoformat(raw_event_date.replace("Z", "+00:00"))
@@ -385,7 +388,7 @@ class AssistantService:
         else:
             event_date = now + timedelta(days=60)
 
-        total_budget = float(event.get("total_budget", 10000.0))
+        total_budget = float(_safe_get(event, "total_budget", 10000.0) or 10000.0)
 
         # Check for Category mentions
         category_map: dict[str, BudgetCategory] = {
@@ -450,14 +453,16 @@ class AssistantService:
 
             # Find source category existing budget or compute percentage
             src_existing = sum(
-                float(b.get("estimated_amount", 0)) for b in budget_items if b.get("category") == src_cat
+                float(_safe_get(b, "estimated_amount", 0) or 0)
+                for b in budget_items
+                if _safe_get(b, "category") == src_cat or _safe_get(b, "category") == getattr(src_cat, "value", str(src_cat))
             )
             base_amount = src_existing if src_existing > 0 else (total_budget * 0.25)
 
             if "%" in unit or "percent" in p_lower:
-                adjust_amount = _round_currency(base_amount * (num_val / 100.0))
+                adjust_amount = round_currency(base_amount * (num_val / 100.0))
             else:
-                adjust_amount = _round_currency(num_val)
+                adjust_amount = round_currency(num_val)
 
             adj_src = BudgetAdjustmentDiff(
                 category=src_cat,
@@ -497,15 +502,17 @@ class AssistantService:
                 (v for k, v in category_map.items() if k in cat_str), BudgetCategory.CATERING
             )
             cat_existing = sum(
-                float(b.get("estimated_amount", 0)) for b in budget_items if b.get("category") == cat
+                float(_safe_get(b, "estimated_amount", 0) or 0)
+                for b in budget_items
+                if _safe_get(b, "category") == cat or _safe_get(b, "category") == getattr(cat, "value", str(cat))
             )
             base_amount = cat_existing if cat_existing > 0 else (total_budget * 0.2)
 
             is_decrease = action_verb in ["reduce", "decrease", "cut"]
             if "%" in unit or "percent" in p_lower:
-                adjust_amount = _round_currency(base_amount * (num_val / 100.0))
+                adjust_amount = round_currency(base_amount * (num_val / 100.0))
             else:
-                adjust_amount = _round_currency(num_val)
+                adjust_amount = round_currency(num_val)
 
             delta = -adjust_amount if is_decrease else adjust_amount
             action_type = "decrease" if is_decrease else "increase"
@@ -609,7 +616,7 @@ class AssistantService:
             p_lower,
         )
         if budget_match:
-            new_budget = _round_currency(float(budget_match.group(1)))
+            new_budget = round_currency(float(budget_match.group(1)))
             reply = (
                 f"I have staged a proposal to update your event's total planned budget to **${new_budget:,.2f}**."
             )
@@ -627,7 +634,7 @@ class AssistantService:
             target_quote = 0.0
             q_match = re.search(r"(?:quote|budget|price|cost|for)\s+\$?(\d+(?:\.\d+)?)", p_lower)
             if q_match:
-                target_quote = _round_currency(float(q_match.group(1)))
+                target_quote = round_currency(float(q_match.group(1)))
 
             v_diff = VendorAdditionDiff(
                 category=v_cat,
@@ -642,7 +649,7 @@ class AssistantService:
             return reply, ProposedChanges(vendor_additions=[v_diff]), True
 
         # 6. Informational Advice / Ideas (No persistent changes needed)
-        ev_type = str(event.get("event_type", "wedding")).lower()
+        ev_type = str(_safe_get(event, "event_type", "wedding") or "wedding").lower()
         if "favor" in p_lower or "gift" in p_lower:
             reply = (
                 f"Here are top favor concepts tailored for your **{ev_type}**:\n"
@@ -654,7 +661,7 @@ class AssistantService:
 
         if "menu" in p_lower or "food" in p_lower or "culinary" in p_lower:
             reply = (
-                f"Here is a curated culinary framework for your **{ev_type}** ({event.get('expected_guest_count', 100)} guests):\n"
+                f"Here is a curated culinary framework for your **{ev_type}** ({_safe_get(event, 'expected_guest_count', 100)} guests):\n"
                 "- **Welcome Grazing Table**: Seasonal charcuterie, artisan cheeses, heirloom crudités.\n"
                 "- **Dual Plated Entrées**: Herb-roasted salmon with lemon beurre blanc or braised beef short ribs.\n"
                 "- **Inclusive Options**: Gluten-free wild mushroom risotto and vegan roasted cauliflower steaks."
@@ -663,7 +670,7 @@ class AssistantService:
 
         # General helpful planning response
         reply = (
-            f"I am ready to assist with your **{event.get('name', 'Event')}**! You can ask me to:\n"
+            f"I am ready to assist with your **{_safe_get(event, 'name', 'Event')}**! You can ask me to:\n"
             "- *\"Reduce catering budget by 10% and allocate to photography\"*\n"
             "- *\"Add a high priority task to book cake 3 weeks before event\"*\n"
             "- *\"Update guest count to 150\"*\n"
@@ -714,24 +721,24 @@ class AssistantService:
             )
 
         # Apply confirmed changes
-        changes = proposal.get("proposed_changes", {})
+        changes = _safe_get(proposal, "proposed_changes", {}) or {}
         budget_items_affected = 0
         tasks_created = 0
         vendors_created = 0
         event_updated = False
 
         # 1. Apply Budget Adjustments
-        adjustments = changes.get("budget_adjustments", [])
+        adjustments = _safe_get(changes, "budget_adjustments", []) or []
         for adj in adjustments:
-            category = adj.get("category")
-            delta = float(adj.get("delta", 0.0))
+            category = _safe_get(adj, "category")
+            delta = float(_safe_get(adj, "delta", 0.0) or 0.0)
 
             existing_item = await db.budget_items.find_one(
                 {"event_id": event_id, "user_id": user_id, "category": category}
             )
             if existing_item:
                 curr_est = float(existing_item.get("estimated_amount", 0.0))
-                new_est = max(0.0, _round_currency(curr_est + delta))
+                new_est = max(0.0, round_currency(curr_est + delta))
                 await db.budget_items.update_one(
                     {"_id": existing_item["_id"]},
                     {
@@ -743,16 +750,17 @@ class AssistantService:
                 )
                 budget_items_affected += 1
             else:
-                new_est = max(0.0, _round_currency(float(adj.get("amount", 0.0))))
+                new_est = max(0.0, round_currency(float(_safe_get(adj, "amount", 0.0) or 0.0)))
+                cat_name = str(category or "Miscellaneous").capitalize()
                 new_item = {
                     "event_id": event_id,
                     "user_id": user_id,
                     "category": category,
-                    "item_name": f"{category.capitalize()} Allocation",
+                    "item_name": f"{cat_name} Allocation",
                     "estimated_amount": new_est,
                     "actual_amount": 0.0,
                     "status": "planned",
-                    "notes": adj.get("reason", "Created via AI Assistant"),
+                    "notes": _safe_get(adj, "reason", "Created via AI Assistant"),
                     "created_at": datetime.now(UTC),
                     "updated_at": datetime.now(UTC),
                 }
@@ -760,19 +768,19 @@ class AssistantService:
                 budget_items_affected += 1
 
         # 2. Apply Tasks
-        task_additions = changes.get("task_additions", [])
+        task_additions = _safe_get(changes, "task_additions", []) or []
         if task_additions:
             task_docs = [
                 {
                     "event_id": event_id,
                     "user_id": user_id,
-                    "title": t.get("title"),
-                    "category": t.get("category", "General"),
-                    "due_date": t.get("due_date"),
-                    "priority": t.get("priority", "medium"),
+                    "title": _safe_get(t, "title"),
+                    "category": _safe_get(t, "category", "General"),
+                    "due_date": _safe_get(t, "due_date"),
+                    "priority": _safe_get(t, "priority", "medium"),
                     "status": "pending",
                     "dependencies": [],
-                    "description": t.get("description"),
+                    "description": _safe_get(t, "description"),
                     "created_at": datetime.now(UTC),
                     "updated_at": datetime.now(UTC),
                 }
@@ -782,18 +790,18 @@ class AssistantService:
             tasks_created = len(task_docs)
 
         # 3. Apply Vendors
-        vendor_additions = changes.get("vendor_additions", [])
+        vendor_additions = _safe_get(changes, "vendor_additions", []) or []
         if vendor_additions:
             vendor_docs = [
                 {
                     "event_id": event_id,
                     "user_id": user_id,
-                    "category": v.get("category"),
-                    "item_name": v.get("item_name"),
-                    "quotation_amount": float(v.get("target_quote", 0.0)),
+                    "category": _safe_get(v, "category"),
+                    "item_name": _safe_get(v, "item_name"),
+                    "quotation_amount": float(_safe_get(v, "target_quote", 0.0) or 0.0),
                     "booking_status": "not_started",
                     "payment_status": "unpaid",
-                    "notes": v.get("suggested_scope"),
+                    "notes": _safe_get(v, "suggested_scope"),
                     "contact_info": "",
                     "created_at": datetime.now(UTC),
                     "updated_at": datetime.now(UTC),
@@ -804,15 +812,15 @@ class AssistantService:
             vendors_created = len(vendor_docs)
 
         # 4. Apply Event Updates
-        ev_updates = changes.get("event_updates")
+        ev_updates = _safe_get(changes, "event_updates")
         if ev_updates:
             update_fields: dict[str, Any] = {}
-            if ev_updates.get("expected_guest_count") is not None:
-                update_fields["expected_guest_count"] = int(ev_updates["expected_guest_count"])
-            if ev_updates.get("total_budget") is not None:
-                update_fields["total_budget"] = float(ev_updates["total_budget"])
-            if ev_updates.get("theme") is not None:
-                update_fields["theme"] = str(ev_updates["theme"])
+            if _safe_get(ev_updates, "expected_guest_count") is not None:
+                update_fields["expected_guest_count"] = int(_safe_get(ev_updates, "expected_guest_count"))
+            if _safe_get(ev_updates, "total_budget") is not None:
+                update_fields["total_budget"] = float(_safe_get(ev_updates, "total_budget"))
+            if _safe_get(ev_updates, "theme") is not None:
+                update_fields["theme"] = str(_safe_get(ev_updates, "theme"))
 
             if update_fields:
                 update_fields["updated_at"] = datetime.now(UTC)

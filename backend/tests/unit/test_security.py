@@ -26,12 +26,12 @@ def test_password_strength_validation():
     # Too short
     valid, err = validate_password_strength("Short1!")
     assert not valid
-    assert "at least 8 characters" in err
+    assert err is not None and "at least 8 characters" in err
 
     # No numbers or symbols
     valid, err = validate_password_strength("allletterspassword")
     assert not valid
-    assert "number or special character" in err
+    assert err is not None and "number or special character" in err
 
     # Valid
     valid, err = validate_password_strength("ValidPassword123!")
