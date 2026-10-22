@@ -54,9 +54,11 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+!frontend/.env.production
 **/.env
 **/.env.*
 !**/.env.example
+!**/frontend/.env.production
 *.pem
 *.key
 *.cert

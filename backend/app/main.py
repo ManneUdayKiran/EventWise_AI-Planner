@@ -40,11 +40,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS Middleware
+    # CORS Middleware (Fully supports Vercel, Render, local dev, and custom domains)
+    cors_origins = [o for o in settings.ALLOWED_ORIGINS if o != "*"]
+    cors_regex = settings.ALLOW_ORIGIN_REGEX
+    if "*" in settings.ALLOWED_ORIGINS:
+        cors_regex = r"^https?://.*"
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
-        allow_origin_regex=settings.ALLOW_ORIGIN_REGEX,
+        allow_origins=cors_origins,
+        allow_origin_regex=cors_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

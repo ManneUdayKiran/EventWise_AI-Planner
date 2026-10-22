@@ -32,6 +32,18 @@ async def test_cors_headers_allowed_origin(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_cors_vercel_origin_allowed(client: AsyncClient):
+    """Verify Vercel origins are recognized and permitted by regex."""
+    headers = {
+        "Origin": "https://eventwise-ai-planner.vercel.app",
+        "Access-Control-Request-Method": "GET",
+    }
+    response = await client.options("/api/v1/events", headers=headers)
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "https://eventwise-ai-planner.vercel.app"
+
+
+@pytest.mark.asyncio
 async def test_cors_disallowed_origin_rejected(client: AsyncClient):
     """Verify unauthorized external origins are not granted access-control headers."""
     headers = {"Origin": "https://malicious-attacker-website.com"}

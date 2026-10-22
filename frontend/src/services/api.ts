@@ -4,6 +4,10 @@ const getApiBaseUrl = (): string => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
+  // In production builds (e.g. Vercel), default directly to deployed Render backend
+  if (import.meta.env.PROD) {
+    return "https://eventwise-ai-planner.onrender.com/api/v1";
+  }
   const hostname =
     typeof window !== "undefined" && window.location?.hostname
       ? window.location.hostname
