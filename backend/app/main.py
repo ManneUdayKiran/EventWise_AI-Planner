@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
     async def health_check():
         return {
             "status": "healthy",
+            "database": "connected" if db_manager.is_connected else "disconnected",
             "app": settings.APP_NAME,
             "version": "0.1.0",
             "environment": settings.ENVIRONMENT,
