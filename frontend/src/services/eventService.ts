@@ -1247,6 +1247,44 @@ Return a JSON object with:
     // Artificial smooth processing simulation for optimal UX feedback
     await new Promise((resolve) => setTimeout(resolve, 250));
 
+    // Resolve event and budget details safely
+    let event: Event;
+    try {
+      event = await this.getEvent(eventId);
+    } catch {
+      event = {
+        id: eventId,
+        user_id: "demo-planner-001",
+        name: "My Event",
+        event_type: "wedding",
+        event_date: "2026-12-31T00:00:00.000Z",
+        location: "Main Venue",
+        total_budget: 10000,
+        expected_guest_count: 50,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    let budgetSummary: BudgetSummary;
+    try {
+      budgetSummary = await this.getBudgetSummary(eventId);
+    } catch {
+      budgetSummary = {
+        total_budget: event.total_budget || 10000,
+        currency: event.currency || "USD",
+        total_estimated: 0,
+        total_actual: 0,
+        remaining_budget: event.total_budget || 10000,
+        cost_per_guest: 0,
+        utilization_percentage: 0,
+        is_overspent: false,
+        overspent_amount: 0,
+        items_by_category: {},
+        items: [],
+      };
+    }
+
     const chatKey = STORAGE_KEYS.CHAT_PREFIX + eventId;
     const history = getStored<AssistantMessageLog[]>(chatKey, []);
 
@@ -1323,9 +1361,9 @@ JSON schema:
   }
 }`;
 
-        const userPrompt = `Event: ${event.name} (${event.event_type})
-Total Budget: $${event.total_budget}
-Guests: ${event.expected_guest_count}
+        const userPrompt = `Event: ${event?.name || "Event"} (${event?.event_type || "General"})
+Total Budget: $${event?.total_budget ?? 10000}
+Guests: ${event?.expected_guest_count ?? 50}
 User Message: ${prompt}`;
 
         const groqResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1399,7 +1437,7 @@ User Message: ${prompt}`;
     const proposal_id = generateId("prop");
 
     if (lower.includes("budget") || lower.includes("spend") || lower.includes("cost")) {
-      reply = `You have planned $${event.total_budget.toLocaleString()} with $${budgetSummary.total_actual.toLocaleString()} recorded in actual expenses ($${budgetSummary.remaining_budget.toLocaleString()} remaining). Would you like me to stage a budget reallocation across categories?`;
+      reply = `You have planned $${(event?.total_budget ?? 10000).toLocaleString()} with $${(budgetSummary?.total_actual ?? 0).toLocaleString()} recorded in actual expenses ($${(budgetSummary?.remaining_budget ?? 10000).toLocaleString()} remaining). Would you like me to stage a budget reallocation across categories?`;
       if (lower.includes("increase") || lower.includes("decrease") || lower.includes("add")) {
         proposed_changes = {
           budget_adjustments: [
@@ -1436,7 +1474,7 @@ User Message: ${prompt}`;
       reply =
         "I have staged a new milestone task based on your request. Please review the details below and confirm to add it to your timeline.";
     } else {
-      reply = `I am your EventWise Copilot for **${event.name}**. I can help you reallocate budget items, add milestone tasks, track vendor quotes, or reschedule deadlines. What would you like to adjust?`;
+      reply = `I am your EventWise Copilot for **${event?.name || "your event"}**. I can help you reallocate budget items, add milestone tasks, track vendor quotes, or reschedule deadlines. What would you like to adjust?`;
     }
 
     if (proposed_changes && proposal_id) {
