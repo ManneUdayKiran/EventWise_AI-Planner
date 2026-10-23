@@ -67,7 +67,9 @@ async def test_sample_provider_birthday_plan():
 
     assert plan.event_id == "test-bday-1"
     assert "Liam's 30th Birthday" in plan.summary
-    assert any("DJ" in item.item_name or "Photo" in item.item_name for item in plan.budget_allocations)
+    assert any(
+        "DJ" in item.item_name or "Photo" in item.item_name for item in plan.budget_allocations
+    )
     assert plan.total_proposed_budget <= 5000.01
 
 

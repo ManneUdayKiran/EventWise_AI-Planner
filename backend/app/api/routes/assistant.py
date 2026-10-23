@@ -1,7 +1,9 @@
 """API routes for conversational AI assistant and proposal confirmations."""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.api.deps import get_current_user, get_database
 from app.schemas.assistant import (
     AssistantConfirmRequest,
     AssistantConfirmResponse,
@@ -9,6 +11,7 @@ from app.schemas.assistant import (
     AssistantMessageRequest,
     AssistantResponse,
 )
+from app.schemas.user import UserResponse
 from app.services.assistant_service import AssistantService
 
 router = APIRouter(tags=["Conversational Assistant"])
@@ -29,12 +32,14 @@ router = APIRouter(tags=["Conversational Assistant"])
 async def send_assistant_message(
     event_id: str = "custom",
     req: AssistantMessageRequest | None = None,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> AssistantResponse:
     """Submit a conversational modification request or query for targeted event planning changes."""
-    service = AssistantService()
+    service = AssistantService(db)
     if req is None:
         req = AssistantMessageRequest(prompt="Hello")
-    return await service.handle_message(event_id, "demo-planner-001", req)
+    return await service.handle_message(event_id, current_user.id, req)
 
 
 @router.post(
@@ -47,13 +52,12 @@ async def confirm_assistant_proposal(
     event_id: str,
     proposal_id: str,
     req: AssistantConfirmRequest = AssistantConfirmRequest(),
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> AssistantConfirmResponse:
     """Apply the staged diff changes or dismiss the proposal."""
-    return AssistantConfirmResponse(
-        proposal_id=proposal_id,
-        applied=req.confirmed,
-        message="Proposal confirmed and applied to localStorage." if req.confirmed else "Proposal dismissed.",
-    )
+    service = AssistantService(db)
+    return await service.confirm_proposal(event_id, proposal_id, current_user.id, req.confirmed)
 
 
 @router.get(
@@ -65,6 +69,9 @@ async def confirm_assistant_proposal(
 async def get_assistant_history(
     event_id: str,
     limit: int = 50,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
 ) -> list[AssistantMessageLog]:
     """Fetch chronological conversation message history."""
-    return []
+    service = AssistantService(db)
+    return await service.get_conversation_history(event_id, current_user.id, limit)

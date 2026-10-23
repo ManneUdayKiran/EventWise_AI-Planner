@@ -77,7 +77,9 @@ class EventService:
 
             allocated = sum(b.get("estimated_amount", 0.0) for b in budget_items)
             spent = sum(b.get("actual_amount", 0.0) for b in budget_items)
-            rem = round_currency(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated))
+            rem = round_currency(
+                float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated)
+            )
 
             total_t = len(tasks)
             completed_t = sum(1 for t in tasks if t.get("status") == "completed")
@@ -123,7 +125,9 @@ class EventService:
 
         allocated = sum(b.get("estimated_amount", 0.0) for b in budget_items)
         spent = sum(b.get("actual_amount", 0.0) for b in budget_items)
-        rem = round_currency(float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated))
+        rem = round_currency(
+            float(e.get("total_budget", 0.0)) - (spent if spent > 0 else allocated)
+        )
 
         total_t = len(tasks)
         completed_t = sum(1 for t in tasks if t.get("status") == "completed")

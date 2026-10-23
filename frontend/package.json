@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "vite build",
+    "lint": "tsc --noEmit",
     "test": "vitest run --environment jsdom --globals",
     "test:coverage": "vitest run --environment jsdom --globals",
     "preview": "vite preview"

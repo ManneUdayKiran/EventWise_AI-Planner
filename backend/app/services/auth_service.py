@@ -153,4 +153,3 @@ class AuthService:
             )
             token = create_access_token(subject=demo_id)
             return TokenResponse(access_token=token, token_type="bearer", user=user_resp)
-

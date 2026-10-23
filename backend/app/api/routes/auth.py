@@ -10,7 +10,6 @@ from app.services.auth_service import AuthService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-
 @router.post(
     "/register",
     response_model=TokenResponse,
@@ -66,4 +65,3 @@ async def demo_session(
     """Get or create instant demo user session without requiring login or signup."""
     service = AuthService(db)
     return await service.get_or_create_demo_user()
-

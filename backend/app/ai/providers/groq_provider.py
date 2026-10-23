@@ -40,15 +40,15 @@ class GroqAIProvider(BaseAIProvider):
         )
 
         user_prompt = f"""Generate a comprehensive, structured event plan for the following details:
-Event Name: {event_context.get('name')}
-Event Type: {event_context.get('event_type')}
-Target Date: {event_context.get('event_date')}
-Location: {event_context.get('location')}
-Expected Guests: {event_context.get('expected_guest_count')}
-Total Planned Budget: ${event_context.get('total_budget')} {event_context.get('currency', 'USD')}
-Theme/Style: {event_context.get('theme') or 'Not specified'}
-Preferences: {event_context.get('preferences') or 'None'}
-Special Requirements: {event_context.get('special_requirements') or 'None'}
+Event Name: {event_context.get("name")}
+Event Type: {event_context.get("event_type")}
+Target Date: {event_context.get("event_date")}
+Location: {event_context.get("location")}
+Expected Guests: {event_context.get("expected_guest_count")}
+Total Planned Budget: ${event_context.get("total_budget")} {event_context.get("currency", "USD")}
+Theme/Style: {event_context.get("theme") or "Not specified"}
+Preferences: {event_context.get("preferences") or "None"}
+Special Requirements: {event_context.get("special_requirements") or "None"}
 
 Return a JSON object with:
 - "summary": string
@@ -100,8 +100,15 @@ Return a JSON object with:
 
             # Normalize budget allocation categories
             valid_budget_cats = {
-                "venue", "catering", "photography", "decoration", "entertainment",
-                "invitations", "transportation", "equipment_rental", "miscellaneous"
+                "venue",
+                "catering",
+                "photography",
+                "decoration",
+                "entertainment",
+                "invitations",
+                "transportation",
+                "equipment_rental",
+                "miscellaneous",
             }
             for b in parsed.get("budget_allocations", []):
                 cat = str(b.get("category", "")).lower().strip()
@@ -109,8 +116,14 @@ Return a JSON object with:
 
             # Normalize vendor checklist categories
             valid_vendor_cats = {
-                "venue", "catering", "photography", "decoration", "entertainment",
-                "invitations", "transportation", "equipment_rental"
+                "venue",
+                "catering",
+                "photography",
+                "decoration",
+                "entertainment",
+                "invitations",
+                "transportation",
+                "equipment_rental",
             }
             for v in parsed.get("vendor_categories", []):
                 cat = str(v.get("category", "")).lower().strip()
@@ -132,7 +145,10 @@ Return a JSON object with:
             parsed["provider_used"] = f"groq ({self._model})"
             parsed["is_fallback"] = False
             parsed["total_proposed_budget"] = round(
-                sum(float(b.get("estimated_amount", 0.0)) for b in parsed.get("budget_allocations", [])),
+                sum(
+                    float(b.get("estimated_amount", 0.0))
+                    for b in parsed.get("budget_allocations", [])
+                ),
                 2,
             )
 

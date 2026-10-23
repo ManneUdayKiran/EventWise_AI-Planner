@@ -75,13 +75,9 @@ class AssistantService:
         """Process natural language request, generate advice or targeted modification proposal."""
         db = self.db
         event = req.event_context
-        if not event and db is not None:
-            try:
-                event = await self._get_event_and_verify_ownership(event_id, user_id)
-            except Exception:
-                event = None
-
-        if not event:
+        if db is not None and event_id != "custom":
+            event = await self._get_event_and_verify_ownership(event_id, user_id)
+        elif not event:
             event = {
                 "id": event_id,
                 "name": "Event",
@@ -97,19 +93,25 @@ class AssistantService:
 
         if not budget_items and db is not None:
             try:
-                budget_items = await db.budget_items.find({"event_id": event_id, "user_id": user_id}).to_list(length=100)
+                budget_items = await db.budget_items.find(
+                    {"event_id": event_id, "user_id": user_id}
+                ).to_list(length=100)
             except Exception:
                 budget_items = []
 
         if not tasks and db is not None:
             try:
-                tasks = await db.tasks.find({"event_id": event_id, "user_id": user_id}).to_list(length=100)
+                tasks = await db.tasks.find({"event_id": event_id, "user_id": user_id}).to_list(
+                    length=100
+                )
             except Exception:
                 tasks = []
 
         if not vendors and db is not None:
             try:
-                vendors = await db.vendor_items.find({"event_id": event_id, "user_id": user_id}).to_list(length=100)
+                vendors = await db.vendor_items.find(
+                    {"event_id": event_id, "user_id": user_id}
+                ).to_list(length=100)
             except Exception:
                 vendors = []
 
@@ -132,12 +134,15 @@ class AssistantService:
 
         if proposal is None and not req.force_fallback and self.settings.GEMINI_API_KEY:
             try:
-                proposal = await self._query_gemini(event, budget_items, tasks, vendors, prompt_text)
+                proposal = await self._query_gemini(
+                    event, budget_items, tasks, vendors, prompt_text
+                )
                 provider_used = self.settings.AI_MODEL
                 is_fallback = False
             except Exception as e:
                 logger.warning(
-                    "Gemini assistant call failed (%s); seamlessly falling back to deterministic engine.", e
+                    "Gemini assistant call failed (%s); seamlessly falling back to deterministic engine.",
+                    e,
                 )
                 proposal = None
 
@@ -152,7 +157,12 @@ class AssistantService:
 
         # Persist proposal if changes are staged
         import uuid
-        proposal_id_str: str | None = f"prop-{uuid.uuid4().hex[:12]}" if (requires_confirmation and proposed_changes) else None
+
+        proposal_id_str: str | None = (
+            f"prop-{uuid.uuid4().hex[:12]}"
+            if (requires_confirmation and proposed_changes)
+            else None
+        )
         if db is not None and requires_confirmation and proposed_changes:
             try:
                 new_proposal_doc = {
@@ -212,9 +222,13 @@ class AssistantService:
         user_prompt: str,
     ) -> tuple[str, ProposedChanges | None, bool]:
         """Query Gemini API with strict schema instructions."""
-        budget_summary_str = ", ".join(
-            f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}" for b in budget_items[:10]
-        ) or "None recorded"
+        budget_summary_str = (
+            ", ".join(
+                f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}"
+                for b in budget_items[:10]
+            )
+            or "None recorded"
+        )
 
         system_instruction = (
             "You are EventWise AI, an expert event planning assistant. "
@@ -290,9 +304,13 @@ class AssistantService:
         user_prompt: str,
     ) -> tuple[str, ProposedChanges | None, bool]:
         """Query Groq API using JSON mode and openai/gpt-oss model."""
-        budget_summary_str = ", ".join(
-            f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}" for b in budget_items[:10]
-        ) or "None recorded"
+        budget_summary_str = (
+            ", ".join(
+                f"{_safe_get(b, 'category')}: ${_safe_get(b, 'estimated_amount', 0)}"
+                for b in budget_items[:10]
+            )
+            or "None recorded"
+        )
 
         system_instruction = (
             "You are EventWise AI, an expert event planning assistant. "
@@ -455,7 +473,8 @@ class AssistantService:
             src_existing = sum(
                 float(_safe_get(b, "estimated_amount", 0) or 0)
                 for b in budget_items
-                if _safe_get(b, "category") == src_cat or _safe_get(b, "category") == getattr(src_cat, "value", str(src_cat))
+                if _safe_get(b, "category") == src_cat
+                or _safe_get(b, "category") == getattr(src_cat, "value", str(src_cat))
             )
             base_amount = src_existing if src_existing > 0 else (total_budget * 0.25)
 
@@ -504,7 +523,8 @@ class AssistantService:
             cat_existing = sum(
                 float(_safe_get(b, "estimated_amount", 0) or 0)
                 for b in budget_items
-                if _safe_get(b, "category") == cat or _safe_get(b, "category") == getattr(cat, "value", str(cat))
+                if _safe_get(b, "category") == cat
+                or _safe_get(b, "category") == getattr(cat, "value", str(cat))
             )
             base_amount = cat_existing if cat_existing > 0 else (total_budget * 0.2)
 
@@ -532,9 +552,9 @@ class AssistantService:
 
         # 2. Task Addition
         is_task_request = (
-            ("task" in p_lower and any(w in p_lower for w in ["add", "create", "schedule", "new", "set"]))
-            or "remind me" in p_lower
-        )
+            "task" in p_lower
+            and any(w in p_lower for w in ["add", "create", "schedule", "new", "set"])
+        ) or "remind me" in p_lower
         if is_task_request:
             priority = TaskPriority.MEDIUM
             if "urgent" in p_lower:
@@ -573,12 +593,16 @@ class AssistantService:
                 prompt,
                 flags=re.IGNORECASE,
             ).strip()
-            final_title = re.sub(
-                r"^(?:please\s+)?(?:add\s+(?:(?:high|medium|low|urgent)\s+priority\s+)?(?:a\s+)?task\s+(?:to\s+)?|create\s+(?:a\s+)?task\s+(?:to\s+)?|schedule\s+(?:a\s+)?task\s+(?:to\s+)?|remind\s+me\s+to\s+)",
-                "",
-                final_title,
-                flags=re.IGNORECASE,
-            ).strip().capitalize()
+            final_title = (
+                re.sub(
+                    r"^(?:please\s+)?(?:add\s+(?:(?:high|medium|low|urgent)\s+priority\s+)?(?:a\s+)?task\s+(?:to\s+)?|create\s+(?:a\s+)?task\s+(?:to\s+)?|schedule\s+(?:a\s+)?task\s+(?:to\s+)?|remind\s+me\s+to\s+)",
+                    "",
+                    final_title,
+                    flags=re.IGNORECASE,
+                )
+                .strip()
+                .capitalize()
+            )
 
             if len(final_title) < 3:
                 final_title = "Follow up on planning requirement"
@@ -592,18 +616,18 @@ class AssistantService:
             )
 
             reply = (
-                f"I have created a milestone task **\"{final_title}\"** scheduled for "
+                f'I have created a milestone task **"{final_title}"** scheduled for '
                 f"{due_date.strftime('%b %d, %Y')} ({days_before} days before your event) with **{priority.upper()}** priority."
             )
             return reply, ProposedChanges(task_additions=[task_diff]), True
 
         # 3. Guest Count Update
-        guests_match = re.search(r"(?:change|update|set)\s+(?:expected\s+)?guests?\s+(?:count\s+)?to\s+(\d+)", p_lower)
+        guests_match = re.search(
+            r"(?:change|update|set)\s+(?:expected\s+)?guests?\s+(?:count\s+)?to\s+(\d+)", p_lower
+        )
         if guests_match:
             new_guests = int(guests_match.group(1))
-            reply = (
-                f"I have staged a proposal to update your expected guest count to **{new_guests} attendees**."
-            )
+            reply = f"I have staged a proposal to update your expected guest count to **{new_guests} attendees**."
             return (
                 reply,
                 ProposedChanges(event_updates=EventUpdateDiff(expected_guest_count=new_guests)),
@@ -617,9 +641,7 @@ class AssistantService:
         )
         if budget_match:
             new_budget = round_currency(float(budget_match.group(1)))
-            reply = (
-                f"I have staged a proposal to update your event's total planned budget to **${new_budget:,.2f}**."
-            )
+            reply = f"I have staged a proposal to update your event's total planned budget to **${new_budget:,.2f}**."
             return (
                 reply,
                 ProposedChanges(event_updates=EventUpdateDiff(total_budget=new_budget)),
@@ -629,7 +651,8 @@ class AssistantService:
         # 5. Vendor Requirement Addition
         if "add vendor" in p_lower or "need a vendor" in p_lower or "hire a" in p_lower:
             v_cat: VendorCategory = next(
-                (v for k, v in vendor_category_map.items() if k in p_lower), VendorCategory.ENTERTAINMENT
+                (v for k, v in vendor_category_map.items() if k in p_lower),
+                VendorCategory.ENTERTAINMENT,
             )
             target_quote = 0.0
             q_match = re.search(r"(?:quote|budget|price|cost|for)\s+\$?(\d+(?:\.\d+)?)", p_lower)
@@ -671,10 +694,10 @@ class AssistantService:
         # General helpful planning response
         reply = (
             f"I am ready to assist with your **{_safe_get(event, 'name', 'Event')}**! You can ask me to:\n"
-            "- *\"Reduce catering budget by 10% and allocate to photography\"*\n"
-            "- *\"Add a high priority task to book cake 3 weeks before event\"*\n"
-            "- *\"Update guest count to 150\"*\n"
-            "- *\"Add a vendor for acoustic guitar quartet quote $800\"*\n"
+            '- *"Reduce catering budget by 10% and allocate to photography"*\n'
+            '- *"Add a high priority task to book cake 3 weeks before event"*\n'
+            '- *"Update guest count to 150"*\n'
+            '- *"Add a vendor for acoustic guitar quartet quote $800"*\n'
             "- Or ask for creative menu, entertainment, and decor ideas anytime!"
         )
         return reply, None, False
@@ -688,7 +711,9 @@ class AssistantService:
             return AssistantConfirmResponse(
                 proposal_id=proposal_id,
                 applied=confirmed,
-                message="Proposal successfully applied to localStorage." if confirmed else "Proposal dismissed.",
+                message="Proposal successfully applied to localStorage."
+                if confirmed
+                else "Proposal dismissed.",
                 budget_items_affected=1 if confirmed else 0,
                 tasks_created=0,
                 vendors_created=0,
@@ -816,7 +841,9 @@ class AssistantService:
         if ev_updates:
             update_fields: dict[str, Any] = {}
             if _safe_get(ev_updates, "expected_guest_count") is not None:
-                update_fields["expected_guest_count"] = int(_safe_get(ev_updates, "expected_guest_count"))
+                update_fields["expected_guest_count"] = int(
+                    _safe_get(ev_updates, "expected_guest_count")
+                )
             if _safe_get(ev_updates, "total_budget") is not None:
                 update_fields["total_budget"] = float(_safe_get(ev_updates, "total_budget"))
             if _safe_get(ev_updates, "theme") is not None:

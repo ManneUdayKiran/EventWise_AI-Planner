@@ -13,36 +13,40 @@ from httpx import AsyncClient
 async def test_concurrent_api_latency_benchmarks(client: AsyncClient, test_db, sample_user):
     """Verify system efficiency and bounded p50/p95 latency across concurrent async operations."""
     # Seed test event with budget, tasks, and vendors
-    ev_res = await test_db.events.insert_one({
-        "user_id": sample_user["id"],
-        "name": "Benchmark Performance Gala",
-        "event_type": "community",
-        "event_date": (datetime.now(UTC) + timedelta(days=90)).isoformat(),
-        "location": "Innovation Center",
-        "expected_guest_count": 200,
-        "total_budget": 20000.0,
-        "currency": "USD",
-        "status": "planning",
-        "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC),
-    })
-    event_id = str(ev_res.inserted_id)
-
-    # Seed budget items
-    await test_db.budget_items.insert_many([
+    ev_res = await test_db.events.insert_one(
         {
-            "event_id": event_id,
             "user_id": sample_user["id"],
-            "category": "catering",
-            "item_name": f"Buffet Tier {i}",
-            "estimated_amount": 1000.0 * i,
-            "actual_amount": 800.0 * i,
-            "status": "planned",
+            "name": "Benchmark Performance Gala",
+            "event_type": "community",
+            "event_date": (datetime.now(UTC) + timedelta(days=90)).isoformat(),
+            "location": "Innovation Center",
+            "expected_guest_count": 200,
+            "total_budget": 20000.0,
+            "currency": "USD",
+            "status": "planning",
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC),
         }
-        for i in range(1, 6)
-    ])
+    )
+    event_id = str(ev_res.inserted_id)
+
+    # Seed budget items
+    await test_db.budget_items.insert_many(
+        [
+            {
+                "event_id": event_id,
+                "user_id": sample_user["id"],
+                "category": "catering",
+                "item_name": f"Buffet Tier {i}",
+                "estimated_amount": 1000.0 * i,
+                "actual_amount": 800.0 * i,
+                "status": "planned",
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
+            }
+            for i in range(1, 6)
+        ]
+    )
 
     # Endpoints to query concurrently
     endpoints = [
@@ -77,4 +81,3 @@ async def test_concurrent_api_latency_benchmarks(client: AsyncClient, test_db, s
     # Verify that async non-blocking execution keeps latencies well within targets
     assert p50 < 400.0, f"p50 latency too high: {p50:.2f}ms"
     assert p95 < 800.0, f"p95 latency too high: {p95:.2f}ms"
-

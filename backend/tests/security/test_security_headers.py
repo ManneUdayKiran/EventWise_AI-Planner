@@ -40,7 +40,10 @@ async def test_cors_vercel_origin_allowed(client: AsyncClient):
     }
     response = await client.options("/api/v1/events", headers=headers)
     assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == "https://eventwise-ai-planner.vercel.app"
+    assert (
+        response.headers.get("access-control-allow-origin")
+        == "https://eventwise-ai-planner.vercel.app"
+    )
 
 
 @pytest.mark.asyncio
@@ -49,7 +52,10 @@ async def test_cors_disallowed_origin_rejected(client: AsyncClient):
     headers = {"Origin": "https://malicious-attacker-website.com"}
     response = await client.get("/health", headers=headers)
     # When origin is disallowed, CORS middleware must not return access-control-allow-origin for that domain
-    assert response.headers.get("access-control-allow-origin") != "https://malicious-attacker-website.com"
+    assert (
+        response.headers.get("access-control-allow-origin")
+        != "https://malicious-attacker-website.com"
+    )
 
 
 @pytest.mark.asyncio
@@ -64,6 +70,14 @@ async def test_sanitized_error_responses(client: AsyncClient):
     detail_str = str(data["detail"]).lower()
 
     # Ensure internal implementation details are not exposed
-    forbidden_terms = ["traceback", "file \"c:\\", "file \"/usr", "mongodb", "motor", "pymongo", "password_hash"]
+    forbidden_terms = [
+        "traceback",
+        'file "c:\\',
+        'file "/usr',
+        "mongodb",
+        "motor",
+        "pymongo",
+        "password_hash",
+    ]
     for term in forbidden_terms:
         assert term not in detail_str

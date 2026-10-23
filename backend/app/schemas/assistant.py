@@ -22,9 +22,7 @@ class BudgetAdjustmentDiff(BaseSchema):
         default=None, description="Destination category for reallocations"
     )
     amount: float = Field(..., ge=0.0, description="Amount of change or new target")
-    delta: float = Field(
-        default=0.0, description="Net signed change in currency for this category"
-    )
+    delta: float = Field(default=0.0, description="Net signed change in currency for this category")
     reason: str = Field(default="", description="Reasoning or description of adjustment")
 
 
@@ -86,7 +84,9 @@ class AssistantMessageRequest(BaseSchema):
         description="Force deterministic offline NLP parser for testing or offline mode",
     )
     event_context: dict | None = Field(default=None, description="Event details from localStorage")
-    budget_items: list[dict] | None = Field(default=None, description="Budget items from localStorage")
+    budget_items: list[dict] | None = Field(
+        default=None, description="Budget items from localStorage"
+    )
     tasks: list[dict] | None = Field(default=None, description="Tasks from localStorage")
     vendors: list[dict] | None = Field(default=None, description="Vendors from localStorage")
 

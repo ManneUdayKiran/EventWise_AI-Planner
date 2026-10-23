@@ -53,6 +53,7 @@ async def client(test_db: AsyncIOMotorDatabase) -> AsyncGenerator[AsyncClient, N
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
+
 @pytest_asyncio.fixture
 async def sample_user(test_db: AsyncIOMotorDatabase) -> dict[str, Any]:
     """Seed a sample user in the test database and return auth credentials."""

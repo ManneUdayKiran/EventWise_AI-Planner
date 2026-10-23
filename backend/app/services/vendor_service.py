@@ -42,7 +42,9 @@ class VendorService:
         for r in raw_items:
             quote = round_currency(r.get("quotation_amount", 0.0))
             total_quoted += quote
-            if str(r.get("booking_status")) == str(getattr(BookingStatus.BOOKED, "value", BookingStatus.BOOKED)):
+            if str(r.get("booking_status")) == str(
+                getattr(BookingStatus.BOOKED, "value", BookingStatus.BOOKED)
+            ):
                 booked_count += 1
 
             item = VendorItemResponse(
@@ -114,9 +116,13 @@ class VendorService:
                 raise ValidationError("Quotation amount cannot be negative.")
             updates["quotation_amount"] = round_currency(req.quotation_amount)
         if req.booking_status is not None:
-            updates["booking_status"] = str(getattr(req.booking_status, "value", req.booking_status))
+            updates["booking_status"] = str(
+                getattr(req.booking_status, "value", req.booking_status)
+            )
         if req.payment_status is not None:
-            updates["payment_status"] = str(getattr(req.payment_status, "value", req.payment_status))
+            updates["payment_status"] = str(
+                getattr(req.payment_status, "value", req.payment_status)
+            )
         if req.notes is not None:
             updates["notes"] = req.notes.strip() if req.notes else None
         if req.contact_info is not None:

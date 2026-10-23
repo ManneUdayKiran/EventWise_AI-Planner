@@ -10,17 +10,19 @@ from httpx import AsyncClient
 async def test_assistant_api_message_and_confirm_flow(client: AsyncClient, test_db, sample_user):
     """Test full conversational message -> proposal -> confirmation lifecycle via HTTP endpoints."""
     # 1. Create Event
-    ev_res = await test_db.events.insert_one({
-        "user_id": sample_user["id"],
-        "name": "Spring Community Fair",
-        "event_type": "community",
-        "event_date": (datetime.now(UTC) + timedelta(days=45)).isoformat(),
-        "location": "Town Square",
-        "expected_guest_count": 150,
-        "total_budget": 8000.0,
-        "currency": "USD",
-        "created_at": datetime.now(UTC),
-    })
+    ev_res = await test_db.events.insert_one(
+        {
+            "user_id": sample_user["id"],
+            "name": "Spring Community Fair",
+            "event_type": "community",
+            "event_date": (datetime.now(UTC) + timedelta(days=45)).isoformat(),
+            "location": "Town Square",
+            "expected_guest_count": 150,
+            "total_budget": 8000.0,
+            "currency": "USD",
+            "created_at": datetime.now(UTC),
+        }
+    )
     event_id = str(ev_res.inserted_id)
 
     # 2. Post Assistant Message
@@ -67,17 +69,19 @@ async def test_assistant_api_message_and_confirm_flow(client: AsyncClient, test_
 async def test_assistant_api_bola_isolation(client: AsyncClient, test_db, sample_user):
     """Test cross-tenant access to assistant returns 404 (IDOR/BOLA protection)."""
     # Event belonging to a different user
-    ev_res = await test_db.events.insert_one({
-        "user_id": "other-user-999",
-        "name": "Secret VIP Event",
-        "event_type": "wedding",
-        "event_date": (datetime.now(UTC) + timedelta(days=15)).isoformat(),
-        "location": "Private Villa",
-        "expected_guest_count": 50,
-        "total_budget": 50000.0,
-        "currency": "USD",
-        "created_at": datetime.now(UTC),
-    })
+    ev_res = await test_db.events.insert_one(
+        {
+            "user_id": "other-user-999",
+            "name": "Secret VIP Event",
+            "event_type": "wedding",
+            "event_date": (datetime.now(UTC) + timedelta(days=15)).isoformat(),
+            "location": "Private Villa",
+            "expected_guest_count": 50,
+            "total_budget": 50000.0,
+            "currency": "USD",
+            "created_at": datetime.now(UTC),
+        }
+    )
     other_event_id = str(ev_res.inserted_id)
 
     resp = await client.post(

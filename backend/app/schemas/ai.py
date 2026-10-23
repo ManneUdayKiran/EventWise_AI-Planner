@@ -16,7 +16,9 @@ class AIBudgetItemProposal(BaseSchema):
     category: BudgetCategory = Field(..., description="Standard budget category")
     item_name: str = Field(..., min_length=2, max_length=150, description="Expense name")
     estimated_amount: float = Field(..., ge=0.0, description="Estimated allocation amount")
-    notes: str | None = Field(default=None, max_length=500, description="Cost breakdown or reasoning")
+    notes: str | None = Field(
+        default=None, max_length=500, description="Cost breakdown or reasoning"
+    )
 
 
 class AITaskProposal(BaseSchema):

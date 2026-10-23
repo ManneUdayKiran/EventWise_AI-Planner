@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.database import db_manager
 from app.core.errors import UnauthorizedError
 from app.core.security import decode_access_token
 from app.schemas.user import UserResponse
@@ -61,5 +62,5 @@ async def get_strict_current_user(
 
 
 async def get_database():
-    """No database needed since storage is in client-side localStorage."""
-    return None
+    """Dependency providing the active MongoDB database instance."""
+    return db_manager.db

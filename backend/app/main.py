@@ -16,15 +16,19 @@ from app.api.routes.events import router as events_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.vendors import router as vendors_router
 from app.core.config import get_settings
+from app.core.database import db_manager
 from app.core.errors import AppError, app_error_handler
 from app.core.rate_limit import RateLimiterMiddleware
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager to clean clients."""
+    """Application lifespan manager to clean clients and manage database."""
+    settings = get_settings()
+    await db_manager.connect(settings.MONGODB_URL, settings.DB_NAME)
     yield
     await ai_http_client.close()
+    await db_manager.disconnect()
 
 
 def create_app() -> FastAPI:
@@ -38,11 +42,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS Middleware - Permissive for Vercel, localhost, and custom domains
+    # CORS Middleware - Configured with allowed origins and regex matching
+    origins = (
+        settings.ALLOWED_ORIGINS
+        if isinstance(settings.ALLOWED_ORIGINS, list)
+        else [settings.ALLOWED_ORIGINS]
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=origins,
+        allow_origin_regex=settings.ALLOW_ORIGIN_REGEX,
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
@@ -72,9 +82,12 @@ def create_app() -> FastAPI:
         headers = {
             "Access-Control-Allow-Origin": origin,
         }
+        content = {"detail": "Internal server error"}
+        if settings.DEBUG or settings.ENVIRONMENT == "development":
+            content["error"] = str(exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error", "error": str(exc)},
+            content=content,
             headers=headers,
         )
 

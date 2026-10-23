@@ -31,13 +31,42 @@ class SampleAIProvider(BaseAIProvider):
         total_budget = float(event_context.get("total_budget", 5000.0))
         theme = event_context.get("theme") or "Modern Elegance"
 
-        if any(k in event_type for k in ["birthday", "party", "anniversary", "celebration", "shower", "gala", "reunion"]):
-            return self._generate_birthday_plan(event_id, name, location, guests, total_budget, theme)
-        elif any(k in event_type for k in ["community", "conference", "corporate", "hackathon", "meetup", "summit", "festival", "concert", "seminar"]):
-            return self._generate_community_plan(event_id, name, location, guests, total_budget, theme)
+        if any(
+            k in event_type
+            for k in [
+                "birthday",
+                "party",
+                "anniversary",
+                "celebration",
+                "shower",
+                "gala",
+                "reunion",
+            ]
+        ):
+            return self._generate_birthday_plan(
+                event_id, name, location, guests, total_budget, theme
+            )
+        elif any(
+            k in event_type
+            for k in [
+                "community",
+                "conference",
+                "corporate",
+                "hackathon",
+                "meetup",
+                "summit",
+                "festival",
+                "concert",
+                "seminar",
+            ]
+        ):
+            return self._generate_community_plan(
+                event_id, name, location, guests, total_budget, theme
+            )
         else:
-            return self._generate_wedding_plan(event_id, name, location, guests, total_budget, theme)
-
+            return self._generate_wedding_plan(
+                event_id, name, location, guests, total_budget, theme
+            )
 
     def _generate_wedding_plan(
         self, event_id: str, name: str, location: str, guests: int, total_budget: float, theme: str

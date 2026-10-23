@@ -16,7 +16,9 @@ async def test_ai_provider_failure_triggers_fallback(test_db, sample_user):
     # Mock get_ai_provider to return a failing provider
     failing_provider = AsyncMock()
     failing_provider.provider_name = "failing_mock"
-    failing_provider.generate_plan.side_effect = ConnectionError("Upstream AI API rate limit / timeout")
+    failing_provider.generate_plan.side_effect = ConnectionError(
+        "Upstream AI API rate limit / timeout"
+    )
 
     with patch("app.services.ai_service.get_ai_provider", return_value=failing_provider):
         plan = await service.generate_plan(

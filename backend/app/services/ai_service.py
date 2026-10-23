@@ -143,13 +143,9 @@ class AIService:
                 raise NotFoundError(f"Event with ID '{event_id}' not found.")
 
             if req.replace_existing:
-                await budget_repo.collection.delete_many(
-                    {"event_id": event_id, "user_id": user_id}
-                )
+                await budget_repo.collection.delete_many({"event_id": event_id, "user_id": user_id})
                 await task_repo.collection.delete_many({"event_id": event_id, "user_id": user_id})
-                await vendor_repo.collection.delete_many(
-                    {"event_id": event_id, "user_id": user_id}
-                )
+                await vendor_repo.collection.delete_many({"event_id": event_id, "user_id": user_id})
 
             now = datetime.now(UTC)
             raw_date = event.get("event_date")

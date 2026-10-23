@@ -19,3 +19,7 @@ declare const afterEach: any;
 declare const beforeAll: any;
 declare const afterAll: any;
 
+declare module "@mui/material";
+declare module "@mui/material/*";
+declare module "@mui/icons-material/*";
+

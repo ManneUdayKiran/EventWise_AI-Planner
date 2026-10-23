@@ -39,7 +39,10 @@ class EventBase(BaseSchema):
 
     name: str = Field(..., min_length=2, max_length=120, description="Name of the event")
     event_type: str = Field(
-        ..., min_length=2, max_length=80, description="Event type: wedding, birthday, community, or custom"
+        ...,
+        min_length=2,
+        max_length=80,
+        description="Event type: wedding, birthday, community, or custom",
     )
     event_date: datetime = Field(..., description="Target date and time in UTC")
     location: str = Field(..., min_length=2, max_length=200, description="Event location or venue")

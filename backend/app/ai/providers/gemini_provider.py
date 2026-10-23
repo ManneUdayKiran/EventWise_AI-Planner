@@ -40,15 +40,15 @@ class GeminiAIProvider(BaseAIProvider):
         )
 
         user_prompt = f"""Generate a comprehensive, structured event plan for the following details:
-Event Name: {event_context.get('name')}
-Event Type: {event_context.get('event_type')}
-Target Date: {event_context.get('event_date')}
-Location: {event_context.get('location')}
-Expected Guests: {event_context.get('expected_guest_count')}
-Total Planned Budget: ${event_context.get('total_budget')} {event_context.get('currency', 'USD')}
-Theme/Style: {event_context.get('theme') or 'Not specified'}
-Preferences: {event_context.get('preferences') or 'None'}
-Special Requirements: {event_context.get('special_requirements') or 'None'}
+Event Name: {event_context.get("name")}
+Event Type: {event_context.get("event_type")}
+Target Date: {event_context.get("event_date")}
+Location: {event_context.get("location")}
+Expected Guests: {event_context.get("expected_guest_count")}
+Total Planned Budget: ${event_context.get("total_budget")} {event_context.get("currency", "USD")}
+Theme/Style: {event_context.get("theme") or "Not specified"}
+Preferences: {event_context.get("preferences") or "None"}
+Special Requirements: {event_context.get("special_requirements") or "None"}
 
 Return a JSON object with:
 - "summary": string
